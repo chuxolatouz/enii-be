@@ -1,6 +1,7 @@
 from datetime import datetime
 import jwt
 
+
 def int_to_string(int_number):
     """
     Recibe un entero que representa un número multiplicado por 100.
@@ -13,6 +14,7 @@ def int_to_string(int_number):
     # Reemplazamos el punto por una coma para el formato deseado
     string_float = string_float.replace('.', ',')
     return string_float
+
 
 def string_to_int(string_float):
     """
@@ -35,7 +37,22 @@ def generar_token(id_usuario, secret):
     return token
 
 
-def map_to_doc(document): 
+def map_to_doc(document):
     document['amount'] = int_to_string(document["amount"])
     document['total_amount'] = int_to_string(document["total_amount"])
     return document
+
+
+def actualizar_pasos(status, paso):
+    new_status = status
+    if paso > status["actual"]:
+        new_status["actual"] = paso
+    if paso == status["actual"]:
+        new_status["actual"] = paso + 1
+
+    import pdb
+    pdb.set_trace()
+    if paso not in status["completado"]:
+        new_status["completado"].append(paso)
+
+    return new_status

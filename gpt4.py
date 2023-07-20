@@ -5,7 +5,7 @@ from flask_cors import CORS
 from datetime import datetime
 from bson import ObjectId, json_util
 from decorators import validar_datos, allow_cors, token_required
-from utils import string_to_int, int_to_string, generar_token, map_to_doc
+from utils import string_to_int, int_to_string, generar_token, map_to_doc, actualizar_pasos
 import json
 import random
 import math
@@ -149,7 +149,8 @@ def crear_proyecto():
     data["miembros"] = []
     data["balance"] = 000
     data["balance_inicial"] = 000
-    data["status"] = "new"
+    data["status"] = {"actual": 1, "completado": []}
+    data["show"] = {"status": False}
     data["owner"] = ObjectId(current_user)
     db_proyectos.insert_one(data)
     return jsonify({"message": "Proyecto creado con éxito"}), 201
@@ -166,12 +167,17 @@ def asignar_usuario_proyecto():
     # Verificar si el usuario ya está en la lista de miembros
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
     miembros = proyecto["miembros"]
+
     if any(miembro["usuario"]["_id"]["$oid"] == data["usuario"]["_id"]["$oid"] for miembro in miembros):
         return jsonify({"message": "El usuario ya es miembro del proyecto"}), 400
 
     # Agregar el usuario a la lista de miembros
+    new_status = {}
+    if 2 not in proyecto["status"]["completado"]:
+        new_status = actualizar_pasos(proyecto["status"], 2)
+
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
-                            "$push": {"miembros": data}})
+                            "$push": {"miembros": data}, "$set": {"status": new_status}})
     return jsonify({"message": "Usuario asignado al proyecto con éxito"}), 200
 
 
@@ -200,8 +206,14 @@ def establecer_regla_distribucion():
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     regla_distribucion = data["regla_distribucion"]
+
+    new_changes = {"regla_distribucion": regla_distribucion}
+    if 3 not in proyecto["status"]["completado"]:
+        new_status = actualizar_pasos(proyecto["status"], 3)
+        new_changes["status"] = new_status
+
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
-                            "$set": {"regla_distribucion": regla_distribucion}})
+                            "$set": new_changes})
     return jsonify({"message": "Regla de distribución establecida con éxito"}), 200
 
 
@@ -214,8 +226,14 @@ def asignar_balance():
     proyecto = db_proyectos.find_one({'_id': ObjectId(proyecto_id)})
     data_balance = string_to_int(data["balance"])
     balance = data_balance + int(proyecto["balance"])
+    new_changes = {"balance": balance}
+
+    if 1 not in proyecto["status"]["completado"]:
+        new_status = actualizar_pasos(proyecto["status"], 1)
+        new_changes["status"] = new_status
+
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
-                            "$set": {"balance": balance}})
+                            "$set": new_changes})
     data_acciones = {}
     data_acciones["project_id"] = ObjectId(proyecto_id)
     data_acciones['user'] = 'Prueba'
