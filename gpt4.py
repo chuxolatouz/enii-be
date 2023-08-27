@@ -283,8 +283,9 @@ def asignar_balance(user):
     data_acciones['amount'] = data_balance
     data_acciones['total_amount'] = balance
     db_acciones.insert_one(data_acciones)
-    message_log = '%s agrego balance al proyecto por un monto de: %d', user[
-        "nombre"], data_balance
+    message_log = user["nombre"] + \
+        'agrego balance al proyecto por un monto de: $' + \
+        int_to_string(data_balance)
     agregar_log(proyecto_id, message_log)
 
     return jsonify({"message": "Balance asignado con éxito"}), 200
@@ -573,6 +574,13 @@ def obtener_logs(id_proyecto):
     list_dump = json_util.dumps(list_logs)
     list_json = json.loads(list_dump.replace('\\', ''))
     return jsonify(list_json), 200
+
+
+@app.route("/", methods=["GET"])
+def index():
+    return 'pong'
+
+
 # Manejo de errores
 
 
