@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import jwt
 
 
@@ -31,7 +31,7 @@ def string_to_int(string_float):
 def generar_token(id_usuario, secret):
     payload = {
         "sub": str(id_usuario),
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(days=1)
+        "exp": datetime.utcnow() + timedelta(days=30)
     }
     token = jwt.encode(payload, secret, algorithm="HS256")
     return token
@@ -50,8 +50,6 @@ def actualizar_pasos(status, paso):
     if paso == status["actual"]:
         new_status["actual"] = paso + 1
 
-    import pdb
-    pdb.set_trace()
     if paso not in status["completado"]:
         new_status["completado"].append(paso)
 

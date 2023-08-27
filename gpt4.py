@@ -17,7 +17,7 @@ app.config["MONGO_URI"] = "mongodb://localhost:27017/mi_db"
 app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
-CORS(app, origins=["http://localhost:3000"])
+CORS(app)
 
 db_usuarios = mongo.db.usuarios
 db_proyectos = mongo.db.proyectos
@@ -25,8 +25,22 @@ db_roles = mongo.db.roles
 db_acciones = mongo.db.acciones
 db_categorias = mongo.db.categorias
 db_documentos = mongo.db.documentos
+db_logs = mongo.db.logs
 
 # Definir una función personalizada de serialización para manejar los objetos ObjectId
+
+
+def agregar_log(id_proyecto, mensaje):
+
+    data = {}
+    data["id_proyecto"] = ObjectId(id_proyecto)
+    data["fecha_creacion"] = datetime.utcnow()
+    # data["usuario"] = user
+    data["mensaje"] = mensaje
+
+    db_logs.insert_one(data)
+
+    return "registro agregado"
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -34,6 +48,15 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(o, ObjectId):
             return str(o)
         return super().default(o)
+
+
+class CustomJSONEncoder(JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        elif isinstance(o, datetime):
+            return o.isoformat()
+        return JSONEncoder.default(self, o)
 
 
 # Configurar el codificador JSON de Flask para utilizar la función personalizada
@@ -55,12 +78,22 @@ def registrar():
 
 
 @app.route("/login", methods=["POST"])
+@validar_datos({
+    "email": str,
+    "password": str
+})
 def login():
     data = request.get_json()
-    usuario = db_usuarios.find_one({"correo": data["correo"]})
+    usuario = db_usuarios.find_one({"email": data["email"]})
+
     if usuario and bcrypt.check_password_hash(usuario["password"], data["password"]):
         token = generar_token(usuario["_id"], app.config["SECRET_KEY"])
-        return jsonify({"token": token}), 200
+
+        return jsonify({
+            "token": token,
+            "email": data["email"],
+            "role": "admin"
+        }), 200
     else:
         return jsonify({"message": "Credenciales inválidas"}), 401
 
@@ -68,12 +101,12 @@ def login():
 @app.route("/olvido_contraseña", methods=["POST"])
 def olvido_contraseña():
     data = request.get_json()
-    usuario = db_usuarios.find_one({"correo": data["correo"]})
+    usuario = db_usuarios.find_one({"email": data["email"]})
     if usuario:
-        # Enviar correo electrónico con enlace para restablecer contraseña
-        return jsonify({"message": "Se ha enviado un correo electrónico para restablecer la contraseña"}), 200
+        # Enviar email electrónico con enlace para restablecer contraseña
+        return jsonify({"message": "Se ha enviado un email electrónico para restablecer la contraseña"}), 200
     else:
-        return jsonify({"message": "El correo electrónico no está registrado"}), 404
+        return jsonify({"message": "El email electrónico no está registrado"}), 404
 
 
 @app.route("/editar_usuario/<id_usuario>", methods=["PUT"])
@@ -175,9 +208,10 @@ def asignar_usuario_proyecto():
     new_status = {}
     if 2 not in proyecto["status"]["completado"]:
         new_status = actualizar_pasos(proyecto["status"], 2)
-
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
                             "$push": {"miembros": data}, "$set": {"status": new_status}})
+    message_log = 'usuario %s fue asignado al proyecto', usuario.nombre
+    agregar_log(proyecto_id, message_log)
     return jsonify({"message": "Usuario asignado al proyecto con éxito"}), 200
 
 
@@ -197,6 +231,8 @@ def eliminar_usuario_proyecto():
     # Eliminar el usuario de la lista de miembros
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
                             "$pull": {"miembros": {"usuario._id.$oid": usuario_id}}})
+    message_log = 'usuario %s fue eliminado del proyecto', usuario_id
+    agregar_log(proyecto_id, message_log)
     return jsonify({"message": "Usuario eliminado del proyecto con éxito"}), 200
 
 
@@ -214,11 +250,13 @@ def establecer_regla_distribucion():
 
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
                             "$set": new_changes})
+
+    message_log = 'usuario establecio las reglas de distribucion del proyecto'
+    agregar_log(proyecto_id, message_log)
     return jsonify({"message": "Regla de distribución establecida con éxito"}), 200
 
 
 @app.route("/asignar_balance", methods=["PATCH"])
-# @token_required
 @allow_cors
 def asignar_balance():
     data = request.get_json()
@@ -241,6 +279,9 @@ def asignar_balance():
     data_acciones['amount'] = data_balance
     data_acciones['total_amount'] = balance
     db_acciones.insert_one(data_acciones)
+
+    message_log = 'usuario agrego balance al proyecto'
+    agregar_log(proyecto_id, message_log)
 
     return jsonify({"message": "Balance asignado con éxito"}), 200
 
@@ -287,9 +328,9 @@ def mostrar_usuarios():
 
 
 @app.route("/mostrar_proyectos", methods=["GET"])
-# @token_required
 @allow_cors
-def mostrar_proyectos():
+@token_required
+def mostrar_proyectos(user):
     # Obtener el número de página actual
     params = request.args
     skip = int(params.get('page')) if params.get('page') else 0
@@ -426,6 +467,8 @@ def crear_documentos_proyecto(id):
             'ruta': os.path.join(carpeta_presupuesto, nombre_archivo)
         })
     result = db_documentos.insert_one(presupuesto)
+    message_log = 'usuario agrego documento al proyecto'
+    agregar_log(id, message_log)
 
     if result.acknowledged:
         return jsonify({'mensaje': 'Archivos subidos exitosamente'}), 201
@@ -460,6 +503,9 @@ def cerrar_presupuesto(id, doc_id):
 
     db_documentos.update_one({'_id': ObjectId(doc_id)}, {
                              "$set": {"status": "finished"}})
+    message_log = 'usuario cerro presupuesto'
+
+    agregar_log(id, message_log)
 
     return jsonify({'mensaje': 'proyecto ajustado exitosamente'}), 201
 
@@ -505,8 +551,24 @@ def finalizar_proyecto():
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
                             "$set": {"status": "finished", "distribucion_recursos": distribucion}})
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
+    message_log = 'usuario finalizo el proyecto'
+    agregar_log(proyecto_id, message_log)
+
     return jsonify({"message": "Proyecto finalizado con éxito", "proyecto": proyecto}), 200
 
+
+@app.route("/proyectos/<id_proyecto>/logs", methods=["GET"])
+@allow_cors
+def obtener_logs(id_proyecto):
+    proyecto = db_proyectos.find_one({"_id": ObjectId(id_proyecto)})
+    if not proyecto:
+        return jsonify({"message": "Proyecto no encontrado"}), 404
+
+    logs = db_logs.find().sort("fecha_creacion", -1)
+    list_logs = list(logs)
+    list_dump = json_util.dumps(list_logs)
+    list_json = json.loads(list_dump.replace('\\', ''))
+    return jsonify(list_json), 200
 # Manejo de errores
 
 
