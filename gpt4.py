@@ -562,17 +562,28 @@ def finalizar_proyecto():
     return jsonify({"message": "Proyecto finalizado con éxito", "proyecto": proyecto}), 200
 
 
-@app.route("/proyectos/<id_proyecto>/logs", methods=["GET"])
+@app.route("/proyecto/<string:id>/logs", methods=["GET"])
 @allow_cors
-def obtener_logs(id_proyecto):
-    proyecto = db_proyectos.find_one({"_id": ObjectId(id_proyecto)})
-    if not proyecto:
-        return jsonify({"message": "Proyecto no encontrado"}), 404
+def obtener_logs(id):
+    id = ObjectId(id)
 
-    logs = db_logs.find().sort("fecha_creacion", -1)
-    list_logs = list(logs)
-    list_dump = json_util.dumps(list_logs)
+    params = request.args
+    skip = int(params.get('page')) if params.get('page') else 0
+    limit = params.get('limit') if params.get('limit') else 10
+    acciones = db_logs.find({'id_proyecto': id}).skip(
+        skip * limit).limit(limit)
+    quantity = db_logs.count_documents({'id_proyecto': id}) / 10
+    quantity = math.ceil(quantity)
+
+    list_cursor = list(acciones)
+    list_dump = json_util.dumps(list_cursor)
+    # Remover las barras invertidas
     list_json = json.loads(list_dump.replace('\\', ''))
+    list_json = jsonify(
+        request_list=list_json,
+        count=quantity
+    )
+    return list_json, 200
     return jsonify(list_json), 200
 
 
