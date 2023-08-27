@@ -87,11 +87,12 @@ def login():
     usuario = db_usuarios.find_one({"email": data["email"]})
 
     if usuario and bcrypt.check_password_hash(usuario["password"], data["password"]):
-        token = generar_token(usuario["_id"], app.config["SECRET_KEY"])
+        token = generar_token(usuario, app.config["SECRET_KEY"])
 
         return jsonify({
             "token": token,
             "email": data["email"],
+            "id": usuario["_id"],
             "role": "admin"
         }), 200
     else:
@@ -169,15 +170,15 @@ def asignar_rol():
 
 
 @app.route("/crear_proyecto", methods=["POST"])
-# @token_required
+@token_required
 @validar_datos({
     "nombre": str,
     "descripcion": str,
     "fecha_inicio": str,
     "fecha_fin": str
 })
-def crear_proyecto():
-    current_user = '644d550f0814bb028b458716'
+def crear_proyecto(user):
+    current_user = user._id
     data = request.get_json()
     data["miembros"] = []
     data["balance"] = 000
@@ -191,7 +192,8 @@ def crear_proyecto():
 
 @app.route("/asignar_usuario_proyecto", methods=["PATCH"])
 @allow_cors
-def asignar_usuario_proyecto():
+@token_required
+def asignar_usuario_proyecto(user):
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     usuario = data["usuario"]
@@ -217,7 +219,8 @@ def asignar_usuario_proyecto():
 
 @app.route("/eliminar_usuario_proyecto", methods=["PATCH"])
 @allow_cors
-def eliminar_usuario_proyecto():
+@token_required
+def eliminar_usuario_proyecto(user):
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     usuario_id = data["usuario_id"]
@@ -258,7 +261,8 @@ def establecer_regla_distribucion():
 
 @app.route("/asignar_balance", methods=["PATCH"])
 @allow_cors
-def asignar_balance():
+@token_required
+def asignar_balance(user):
     data = request.get_json()
     proyecto_id = data["project_id"]
     proyecto = db_proyectos.find_one({'_id': ObjectId(proyecto_id)})
@@ -279,8 +283,8 @@ def asignar_balance():
     data_acciones['amount'] = data_balance
     data_acciones['total_amount'] = balance
     db_acciones.insert_one(data_acciones)
-
-    message_log = 'usuario agrego balance al proyecto'
+    message_log = '%s agrego balance al proyecto por un monto de: %d', user[
+        "nombre"], data_balance
     agregar_log(proyecto_id, message_log)
 
     return jsonify({"message": "Balance asignado con éxito"}), 200

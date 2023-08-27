@@ -2,6 +2,7 @@ from flask import make_response, request, jsonify, current_app
 import jwt
 from functools import wraps
 
+
 def allow_cors(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -9,6 +10,7 @@ def allow_cors(f):
         resp.headers['Access-Control-Allow-Origin'] = '*'
         return resp
     return decorated
+
 
 def validar_datos(schema):
     def decorator(func):
@@ -25,6 +27,8 @@ def validar_datos(schema):
     return decorator
 
 # Definir una función decoradora para proteger rutas que requieren autenticación
+
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -32,13 +36,13 @@ def token_required(f):
         if not token:
             return jsonify({"message": "Token no proporcionado"}), 403
 
-        try:            
+        try:
             token = token.split()[1]
-            data = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=['HS256'])
-            user_id = data["sub"]
+            data = jwt.decode(
+                token, current_app.config["SECRET_KEY"], algorithms=['HS256'])
         except:
             return jsonify({"message": "Token no es válido o ha expirado"}), 403
 
-        return f(user_id, *args, **kwargs)
+        return f(data, *args, **kwargs)
 
     return decorated

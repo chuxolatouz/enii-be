@@ -28,9 +28,11 @@ def string_to_int(string_float):
     return int_number
 
 
-def generar_token(id_usuario, secret):
+def generar_token(usuario, secret):
     payload = {
-        "sub": str(id_usuario),
+        "sub": str(usuario["_id"]),
+        "email": usuario["email"],
+        "nombre": usuario["nombre"],
         "exp": datetime.utcnow() + timedelta(days=30)
     }
     token = jwt.encode(payload, secret, algorithm="HS256")
