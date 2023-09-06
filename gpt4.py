@@ -178,7 +178,7 @@ def asignar_rol():
     "fecha_fin": str
 })
 def crear_proyecto(user):
-    current_user = user._id
+    current_user = user["sub"]
     data = request.get_json()
     data["miembros"] = []
     data["balance"] = 000
@@ -186,7 +186,10 @@ def crear_proyecto(user):
     data["status"] = {"actual": 1, "completado": []}
     data["show"] = {"status": False}
     data["owner"] = ObjectId(current_user)
-    db_proyectos.insert_one(data)
+    data["user"] = user
+    project = db_proyectos.insert_one(data)
+    message_log = 'Usuario %s ha creado el proyecto' % user["nombre"]
+    agregar_log(project.inserted_id, message_log)
     return jsonify({"message": "Proyecto creado con éxito"}), 201
 
 
@@ -207,12 +210,12 @@ def asignar_usuario_proyecto(user):
         return jsonify({"message": "El usuario ya es miembro del proyecto"}), 400
 
     # Agregar el usuario a la lista de miembros
-    new_status = {}
     if 2 not in proyecto["status"]["completado"]:
         new_status = actualizar_pasos(proyecto["status"], 2)
+
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
                             "$push": {"miembros": data}, "$set": {"status": new_status}})
-    message_log = 'usuario %s fue asignado al proyecto', usuario.nombre
+    message_log = f'{usuario["nombre"]} fue asignado al proyecto por {user["nombre"]} con el rol {data["role"]["label"]}'
     agregar_log(proyecto_id, message_log)
     return jsonify({"message": "Usuario asignado al proyecto con éxito"}), 200
 
@@ -228,33 +231,37 @@ def eliminar_usuario_proyecto(user):
     # Verificar si el usuario ya está en la lista de miembros
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
     miembros = proyecto["miembros"]
-    if not any(miembro["usuario"]["_id"]["$oid"] == usuario_id for miembro in miembros):
+    usuario = None
+    for miembro in miembros:
+        if miembro["usuario"]["_id"]["$oid"] == usuario_id:
+            usuario = miembro["usuario"]
+            break
+    if usuario is None:
         return jsonify({"message": "El usuario no es miembro del proyecto"}), 400
 
     # Eliminar el usuario de la lista de miembros
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
                             "$pull": {"miembros": {"usuario._id.$oid": usuario_id}}})
-    message_log = 'usuario %s fue eliminado del proyecto', usuario_id
+    message_log = f'{usuario["nombre"]} fue eliminado del proyecto por {user["nombre"]}'
     agregar_log(proyecto_id, message_log)
     return jsonify({"message": "Usuario eliminado del proyecto con éxito"}), 200
 
 
-@app.route("/establecer_regla_distribucion", methods=["PATCH"])
+@app.route("/establecer_regla_distribucion", methods=["POST"])
 @token_required
-def establecer_regla_distribucion():
+def establecer_regla_distribucion(user):
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     regla_distribucion = data["regla_distribucion"]
+    proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
 
-    new_changes = {"regla_distribucion": regla_distribucion}
     if 3 not in proyecto["status"]["completado"]:
         new_status = actualizar_pasos(proyecto["status"], 3)
-        new_changes["status"] = new_status
 
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
-                            "$set": new_changes})
+                            "$set": {"status": new_status, "reglas": regla_distribucion}})
 
-    message_log = 'usuario establecio las reglas de distribucion del proyecto'
+    message_log = f'{user["nombre"]} establecio las reglas de distribucion del proyecto'
     agregar_log(proyecto_id, message_log)
     return jsonify({"message": "Regla de distribución establecida con éxito"}), 200
 
@@ -283,9 +290,7 @@ def asignar_balance(user):
     data_acciones['amount'] = data_balance
     data_acciones['total_amount'] = balance
     db_acciones.insert_one(data_acciones)
-    message_log = user["nombre"] + \
-        'agrego balance al proyecto por un monto de: $' + \
-        int_to_string(data_balance)
+    message_log = f'{user["nombre"]} agrego balance al proyecto por un monto de: ${int_to_string(data_balance)}'
     agregar_log(proyecto_id, message_log)
 
     return jsonify({"message": "Balance asignado con éxito"}), 200
@@ -297,7 +302,7 @@ def roles():
     roles = db_roles.find({})
     list_cursor = list(roles)
     list_dump = json_util.dumps(list_cursor)
-    # Removezr las barras invertidas
+    # Remover las barras invertidas
     list_json = json.loads(list_dump.replace('\\', ''))
     list_json = jsonify(list_json)
     return list_json
@@ -429,23 +434,26 @@ def mostrar_documentos_proyecto(id):
     return list_json
 
 
-@app.route('/proyecto/<string:id>/documentos', methods=['POST'])
+@app.route('/documento_crear', methods=['POST'])
 @allow_cors
-def crear_documentos_proyecto(id):
+@token_required
+def crear_documentos_proyecto(user):
     # Obtener la ruta de la carpeta del proyecto
+    id = request.form.get('proyecto_id')
     carpeta_proyecto = os.path.join('files', id)
+    descripcion = request.form.get('descripcion')
+    monto = request.form.get('monto')
 
     # Crear la carpeta del proyecto si no existe
     if not os.path.exists(carpeta_proyecto):
         os.makedirs(carpeta_proyecto)
 
-    # Obtener la descripción y el monto del presupuesto del formulario
-    descripcion = request.form.get('descripcion')
-
     # Crear el documento del presupuesto
+
     presupuesto = {
         'project_id': ObjectId(id),
         'descripcion': descripcion,
+        'monto': monto,
         'status': 'new',
         'archivos': []
     }
@@ -472,7 +480,7 @@ def crear_documentos_proyecto(id):
             'ruta': os.path.join(carpeta_presupuesto, nombre_archivo)
         })
     result = db_documentos.insert_one(presupuesto)
-    message_log = 'usuario agrego documento al proyecto'
+    message_log = f'{user["nombre"]} agrego el presupuesto {descripcion} con un monto de ${monto}'
     agregar_log(id, message_log)
 
     if result.acknowledged:
@@ -481,10 +489,13 @@ def crear_documentos_proyecto(id):
         return jsonify({'error': 'Error al subir archivos'}), 404
 
 
-@app.route('/proyecto/<string:id>/documento/<string:doc_id>', methods=['POST'])
+@app.route('/documento_cerrar', methods=['POST'])
 @allow_cors
-def cerrar_presupuesto(id, doc_id):
+@token_required
+def cerrar_presupuesto(user):
     data = request.get_json()
+    id = data["proyecto_id"]
+    doc_id = data["doc_id"]
 
     # Actualizas balance
     proyecto = db_proyectos.find_one({'_id': ObjectId(id)})
@@ -498,8 +509,8 @@ def cerrar_presupuesto(id, doc_id):
 
     data_acciones = {}
     data_acciones["project_id"] = ObjectId(id)
-    data_acciones['user'] = 'Prueba'
-    data_acciones['type'] = 'Retiro' + ' ' + data["description"]
+    data_acciones['user'] = user["nombre"]
+    data_acciones['type'] = 'Retiro ' + data["description"]
     data_acciones['amount'] = data_balance * -1
     data_acciones['total_amount'] = balance
     db_acciones.insert_one(data_acciones)
@@ -508,14 +519,17 @@ def cerrar_presupuesto(id, doc_id):
 
     db_documentos.update_one({'_id': ObjectId(doc_id)}, {
                              "$set": {"status": "finished"}})
-    message_log = 'usuario cerro presupuesto'
 
+    message_log = f'{user["nombre"]} cerro el presupuesto {data["description"]} con un monto de ${int_to_string(data_balance)}'
     agregar_log(id, message_log)
 
     return jsonify({'mensaje': 'proyecto ajustado exitosamente'}), 201
 
 
-@app.route("/finalizar_proyecto", methods=["PATCH"])
+# TODO:
+# Falta agregar cambio del token al logger
+
+@app.route("/finalizar_proyecto", methods=["POST"])
 @allow_cors
 def finalizar_proyecto():
     data = request.get_json()
@@ -584,10 +598,11 @@ def obtener_logs(id):
         count=quantity
     )
     return list_json, 200
-    return jsonify(list_json), 200
+    # return jsonify(list_json), 200
 
 
 @app.route("/", methods=["GET"])
+@allow_cors
 def index():
     return 'pong'
 
