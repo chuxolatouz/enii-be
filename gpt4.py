@@ -25,6 +25,7 @@ db_roles = mongo.db.roles
 db_acciones = mongo.db.acciones
 db_categorias = mongo.db.categorias
 db_documentos = mongo.db.documentos
+db_solicitudes = mongo.db.solicitudes
 db_logs = mongo.db.logs
 
 # Definir una función personalizada de serialización para manejar los objetos ObjectId
@@ -266,6 +267,32 @@ def establecer_regla_distribucion(user):
     return jsonify({"message": "Regla de distribución establecida con éxito"}), 200
 
 
+@app.route("/crear_solicitud_regla_fija", methods=["POST"])
+@token_required
+def crear_solicitud_regla_fija(user):
+    data = request.get_json()
+    solicitud_regla = {}
+    solicitud_regla["nombre"] = data["name"]
+    solicitud_regla["reglas"] = data["items"]
+    solicitud_regla["status"] = "new"
+    solicitud_regla["usuario"] = user
+    db_solicitudes.insert_one(solicitud_regla)
+    return jsonify({"message": "Solicitud de regla creada con éxito"}), 200
+
+# TODO: Agregar el tema de los decorators con multiples ID
+
+
+@app.route("/eliminar_solicitud_regla_fija/<string:id>", methods=["POST"])
+@allow_cors
+def eliminar_solicitud_regla_fija(id):
+    query = {'_id': ObjectId(id)}
+    result = db_solicitudes.delete_one(query)
+    if result.deleted_count == 1:
+        return jsonify({"message": "Solicitud de regla eliminada con éxito"}), 200
+    else:
+        return jsonify({"message": "No se pudo eliminar la regla"}), 400
+
+
 @app.route("/asignar_balance", methods=["PATCH"])
 @allow_cors
 @token_required
@@ -324,7 +351,7 @@ def mostrar_usuarios():
                 {"email": {"$regex": text, "$options": "i"}},
             ]
         }
-    list_users = db_usuarios.find(query).skip(skip * limit).limit(limit)
+    list_users = db_usuarios.find().skip(skip * limit).limit(limit)
     quantity = db_usuarios.count_documents(query)
     list_cursor = list(list_users)
     list_dump = json_util.dumps(list_cursor)
@@ -599,6 +626,29 @@ def obtener_logs(id):
     )
     return list_json, 200
     # return jsonify(list_json), 200
+
+
+@app.route("/mostrar_solicitudes", methods=["GET"])
+@allow_cors
+@token_required
+def mostrar_solicitudes(user):
+    # Obtener el número de página actual
+    params = request.args
+    skip = int(params.get('page')) if params.get('page') else 0
+    limit = params.get('limit') if params.get('limit') else 10
+    # query = {"_id": ObjectId(request_id)}
+    list_verification_request = db_solicitudes.find(
+        {}).skip(skip * limit).limit(limit)
+    quantity = db_solicitudes.count_documents({})
+    list_cursor = list(list_verification_request)
+    list_dump = json_util.dumps(list_cursor)
+    # Remover las barras invertidas
+    list_json = json.loads(list_dump.replace('\\', ''))
+    list_json = jsonify(
+        request_list=list_json,
+        count=quantity
+    )
+    return list_json
 
 
 @app.route("/", methods=["GET"])
