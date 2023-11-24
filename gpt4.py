@@ -293,6 +293,20 @@ def eliminar_solicitud_regla_fija(id):
         return jsonify({"message": "No se pudo eliminar la regla"}), 400
 
 
+@app.route("/completar_solicitud_regla_fija/<string:id>", methods=["POST"])
+@allow_cors
+def completar_solicitud_regla_fija(id):
+    data = request.get_json()
+    resolution = data["resolution"]
+    query = {'_id': ObjectId(id)}
+    result = db_solicitudes.update_one(
+        query, {"$set": {"status": resolution}})
+    if result.modified_count == 1:
+        return jsonify({"message": "Solicitud de regla eliminada con éxito"}), 200
+    else:
+        return jsonify({"message": "No se pudo eliminar la regla"}), 400
+
+
 @app.route("/asignar_balance", methods=["PATCH"])
 @allow_cors
 @token_required
