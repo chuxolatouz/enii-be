@@ -210,12 +210,19 @@ def asignar_usuario_proyecto(user):
     if any(miembro["usuario"]["_id"]["$oid"] == data["usuario"]["_id"]["$oid"] for miembro in miembros):
         return jsonify({"message": "El usuario ya es miembro del proyecto"}), 400
 
+    new_status = {}
+    query = {"$push": {"miembros": data}}
     # Agregar el usuario a la lista de miembros
     if 2 not in proyecto["status"]["completado"]:
         new_status = actualizar_pasos(proyecto["status"], 2)
 
-    db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
-                            "$push": {"miembros": data}, "$set": {"status": new_status}})
+    if data["role"]["value"] == "lider":
+        new_status = actualizar_pasos(proyecto["status"], 3)
+
+    if bool(new_status):
+        query["$set"] = {"status": new_status}
+
+    db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, query)
     message_log = f'{usuario["nombre"]} fue asignado al proyecto por {user["nombre"]} con el rol {data["role"]["label"]}'
     agregar_log(proyecto_id, message_log)
     return jsonify({"message": "Usuario asignado al proyecto con éxito"}), 200
@@ -321,6 +328,7 @@ def asignar_balance(user):
     if 1 not in proyecto["status"]["completado"]:
         new_status = actualizar_pasos(proyecto["status"], 1)
         new_changes["status"] = new_status
+        new_changes["balance_inicial"] = balance
 
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
                             "$set": new_changes})
@@ -663,6 +671,73 @@ def mostrar_solicitudes(user):
         count=quantity
     )
     return list_json
+
+
+@app.route("/mostrar_reglas_fijas", methods=["GET"])
+@allow_cors
+@token_required
+def mostrar_reglas_fijas(user):
+    list_request = db_solicitudes.find({"status": "completed"})
+    list_cursor = list(list_request)
+    list_dump = json_util.dumps(list_cursor)
+    list_json = json.loads(list_dump.replace('\\', ''))
+    list_json = jsonify(
+        request_list=list_json,
+    )
+
+    return list_json
+
+
+@app.route("/asignar_regla_fija/", methods=["POST"])
+@allow_cors
+@token_required
+def asignar_regla_fija(user):
+    data = request.get_json()
+    proyecto_id = data["proyecto_id"]
+    regla_id = data["regla_id"]
+
+    # Encontrar Regla
+    proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
+    if proyecto is None:
+        return jsonify({"message": "Proyecto no encontrado"}), 404
+
+    # Encontrara Proyecto
+    regla = db_solicitudes.find_one({"_id": ObjectId(regla_id)})
+    if regla is None:
+        return jsonify({"message": "Regla fija no encontrada"}), 404
+
+    # Verificar proyecto tiene balance inicial
+    if proyecto["balance_inicial"] == 0:
+        return jsonify({"message": "Antes de asignar regla tienes que asignar balance"}), 400
+
+    # Descontar proyecto
+    for x in regla["reglas"]:
+        proyecto_balance = int(proyecto["balance"])
+        balance = proyecto_balance - x["monto"]
+        db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
+                                "$set": {"balance": balance}})
+
+        # Agregas la accion a las actividades
+
+        data_acciones = {}
+        data_acciones["project_id"] = ObjectId(proyecto_id)
+        data_acciones['user'] = user["nombre"]
+        data_acciones['type'] = x["nombre_regla"]
+        data_acciones['amount'] = x["monto"] * -1
+        data_acciones['total_amount'] = balance
+        db_acciones.insert_one(data_acciones)
+
+        message_log = f'{user["nombre"]} asigno la regla: {regla["nombre"]} con el item {x["nombre_regla"]} con un monto de ${int_to_string(x["monto"])}'
+        agregar_log(proyecto_id, message_log)
+
+    # Asignar la regla
+    new_status = actualizar_pasos(proyecto["status"], 5)
+
+    db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
+        "$set": {"regla_fija": regla, "status": new_status}})
+
+    # Dar respuesta que todo esta ok
+    return jsonify({"message": "La regla se asigno correctamente"}), 200
 
 
 @app.route("/", methods=["GET"])

@@ -46,6 +46,19 @@ def map_to_doc(document):
 
 
 def actualizar_pasos(status, paso):
+    "Esta funcion actualiza el status de un proyecto dependiendo de la posicion en la que se encuentre"
+    "Recibe el objecto status y el paso a actualizar"
+    "El objeto status se representa como {'actual': 3, 'completado': [1, 2]}"
+    "En este ejemplo el paso actual a continuar es Agregar Lider"
+    "Segun ese orden ya se agregó un usuario y se agregó balance al proyecto"
+    "-----------------------------"
+    "Status 1: Agregar Balance"
+    "Status 2: Agregar usuarios"
+    "Status 3: Agregar Lider"
+    "Status 4: Agregar Regla de Distribucion"
+    "Status 5: Agregar Regla fija"
+    "Status 6: Completado"
+    "-----------------------"
     new_status = status
     if paso > status["actual"]:
         new_status["actual"] = paso
