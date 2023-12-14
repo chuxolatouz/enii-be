@@ -128,7 +128,7 @@ def crear_rol():
     return jsonify({"message": "Rol creado con éxito"}), 201
 
 
-@app.route('/categorias', methods=["GET"])
+@app.route('/mostrar_categorias', methods=["GET"])
 @allow_cors
 def obtener_categorias():
     search_text = request.args.get('text')
@@ -194,6 +194,40 @@ def crear_proyecto(user):
     return jsonify({"message": "Proyecto creado con éxito"}), 201
 
 
+@app.route("/actualizar_proyecto/<project_id>", methods=["PUT"])
+@token_required
+@validar_datos({
+    "nombre": str,
+    "descripcion": str,
+    "fecha_inicio": str,
+    "fecha_fin": str
+})
+def actualizar_proyecto(user, project_id):
+    current_user = user["sub"]
+    data = request.get_json()
+
+    # Check if project exists
+    project = db_proyectos.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        return jsonify({"message": "Proyecto no encontrado"}), 404
+
+    # Ensure only the owner can update the project
+    # if project["owner"] != ObjectId(current_user):
+    #     return jsonify({"message": "No tienes permiso para actualizar este proyecto"}), 403
+
+    # Update specified fields
+    for key, value in data.items():
+        project[key] = value
+
+    # Save updated project
+    db_proyectos.update_one({"_id": ObjectId(project_id)}, {"$set": project})
+
+    message_log = 'Usuario %s ha actualizado el proyecto' % user["nombre"]
+    agregar_log(project_id, message_log)
+
+    return jsonify({"message": "Proyecto actualizado con éxito"}), 200
+
+
 @app.route("/asignar_usuario_proyecto", methods=["PATCH"])
 @allow_cors
 @token_required
@@ -255,23 +289,25 @@ def eliminar_usuario_proyecto(user):
     return jsonify({"message": "Usuario eliminado del proyecto con éxito"}), 200
 
 
-@app.route("/establecer_regla_distribucion", methods=["POST"])
+@app.route("/asignar_regla_distribucion", methods=["POST"])
+@allow_cors
 @token_required
-def establecer_regla_distribucion(user):
+def asignar_regla_distribucion(user):
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     regla_distribucion = data["regla_distribucion"]
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
 
-    if 3 not in proyecto["status"]["completado"]:
-        new_status = actualizar_pasos(proyecto["status"], 3)
+    if 4 not in proyecto["status"]["completado"]:
+        new_status = actualizar_pasos(proyecto["status"], 4)
+        db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
+                                "$set": {"status": new_status, "reglas": regla_distribucion}})
 
-    db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
-                            "$set": {"status": new_status, "reglas": regla_distribucion}})
+        message_log = f'{user["nombre"]} establecio las reglas de distribucion del proyecto'
+        agregar_log(proyecto_id, message_log)
+        return jsonify({"message": "Regla de distribución establecida con éxito"}), 200
 
-    message_log = f'{user["nombre"]} establecio las reglas de distribucion del proyecto'
-    agregar_log(proyecto_id, message_log)
-    return jsonify({"message": "Regla de distribución establecida con éxito"}), 200
+    return jsonify({"message": "El proyecto ya cuenta con regla de distribución"}), 200
 
 
 @app.route("/crear_solicitud_regla_fija", methods=["POST"])
@@ -279,8 +315,12 @@ def establecer_regla_distribucion(user):
 def crear_solicitud_regla_fija(user):
     data = request.get_json()
     solicitud_regla = {}
+    items = data["items"]
+    for item in items:
+        item["monto"] = item["monto"] * 100
+
     solicitud_regla["nombre"] = data["name"]
-    solicitud_regla["reglas"] = data["items"]
+    solicitud_regla["reglas"] = items
     solicitud_regla["status"] = "new"
     solicitud_regla["usuario"] = user
     db_solicitudes.insert_one(solicitud_regla)
@@ -502,7 +542,7 @@ def crear_documentos_proyecto(user):
     presupuesto = {
         'project_id': ObjectId(id),
         'descripcion': descripcion,
-        'monto': monto,
+        'monto': string_to_int(monto),
         'status': 'new',
         'archivos': []
     }
@@ -542,34 +582,63 @@ def crear_documentos_proyecto(user):
 @allow_cors
 @token_required
 def cerrar_presupuesto(user):
-    data = request.get_json()
-    id = data["proyecto_id"]
-    doc_id = data["doc_id"]
+    print("recibir data")
+    id = request.form.get("proyecto_id")
+    doc_id = request.form.get("doc_id")
+    data_balance = request.form.get("monto")
+    data_descripcion = request.form.get("description")
+    carpeta_proyecto = os.path.join('files', id)
 
+    # Crear la carpeta del proyecto si no existe
+    if not os.path.exists(carpeta_proyecto):
+        os.makedirs(carpeta_proyecto)
+    print('actualiza balance')
     # Actualizas balance
     proyecto = db_proyectos.find_one({'_id': ObjectId(id)})
-    data_balance = string_to_int(data["balance"])
+    data_balance = string_to_int(data_balance)
     proyecto_balance = int(proyecto["balance"])
     balance = proyecto_balance - data_balance
     db_proyectos.update_one({"_id": ObjectId(id)}, {
                             "$set": {"balance": balance}})
 
     # Agregas la accion a las actividades
-
+    print('agrega accion a la actividad')
     data_acciones = {}
     data_acciones["project_id"] = ObjectId(id)
     data_acciones['user'] = user["nombre"]
-    data_acciones['type'] = 'Retiro ' + data["description"]
+    data_acciones['type'] = f'Retiro {data_descripcion}'
     data_acciones['amount'] = data_balance * -1
     data_acciones['total_amount'] = balance
     db_acciones.insert_one(data_acciones)
 
     # Cierras el presupuesto
 
-    db_documentos.update_one({'_id': ObjectId(doc_id)}, {
-                             "$set": {"status": "finished"}})
+    archivos = request.files.getlist('files')
+    archivos_guardados = []
+    print('guarda archivo')
+    # Guardar los archivos en las subcarpetas del proyecto
+    for archivo in archivos:
+        # Obtener el nombre del archivo
+        nombre_archivo = archivo.filename
 
-    message_log = f'{user["nombre"]} cerro el presupuesto {data["description"]} con un monto de ${int_to_string(data_balance)}'
+        # Crear la carpeta del presupuesto
+        presupuesto_id = str(ObjectId())
+        carpeta_presupuesto = os.path.join(carpeta_proyecto, presupuesto_id)
+        os.makedirs(carpeta_presupuesto)
+
+        # Guardar el archivo en la carpeta del presupuesto
+        archivo.save(os.path.join(carpeta_presupuesto, nombre_archivo))
+
+        # Agregar el archivo al arreglo de archivos del presupuesto
+        archivos_guardados.append({
+            'nombre': nombre_archivo,
+            'ruta': os.path.join(carpeta_presupuesto, nombre_archivo)
+        })
+
+    db_documentos.update_one({'_id': ObjectId(doc_id)}, {
+                             "$set": {"status": "finished", "monto_aprobado": data_balance, "archivos_aprobado": archivos_guardados}})
+
+    message_log = f'{user["nombre"]} cerro el presupuesto {data_descripcion} con un monto de ${int_to_string(data_balance)}'
     agregar_log(id, message_log)
 
     return jsonify({'mensaje': 'proyecto ajustado exitosamente'}), 201
