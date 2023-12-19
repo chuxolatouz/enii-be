@@ -120,6 +120,19 @@ def editar_usuario(id_usuario):
 # ... Agregar otros endpoints (iniciar sesión, olvido contraseña, editar información de usuario, etc.) ...
 
 
+@app.route("/eliminar_usuario", methods=["POST"])
+@token_required
+def eliminar_usuario(user):
+    data = request.get_json()
+    id_usuario = data["id_usuario"]
+    result = db_usuarios.delete_one({"_id": ObjectId(id_usuario)})
+
+    if result.deleted_count == 1:
+        return jsonify({"message": "Usuario eliminado éxitosamente"}), 200
+    else:
+        return jsonify({"message": "No se pudo eliminar el usuario"}), 400
+
+
 @app.route("/crear_rol", methods=["POST"])
 @token_required
 def crear_rol():
@@ -526,7 +539,7 @@ def mostrar_documentos_proyecto(id):
 @app.route('/documento_crear', methods=['POST'])
 @allow_cors
 @token_required
-def crear_documentos_proyecto(user):
+def crear_presupuesto(user):
     # Obtener la ruta de la carpeta del proyecto
     id = request.form.get('proyecto_id')
     carpeta_proyecto = os.path.join('files', id)
@@ -582,7 +595,6 @@ def crear_documentos_proyecto(user):
 @allow_cors
 @token_required
 def cerrar_presupuesto(user):
-    print("recibir data")
     id = request.form.get("proyecto_id")
     doc_id = request.form.get("doc_id")
     data_balance = request.form.get("monto")
@@ -592,7 +604,6 @@ def cerrar_presupuesto(user):
     # Crear la carpeta del proyecto si no existe
     if not os.path.exists(carpeta_proyecto):
         os.makedirs(carpeta_proyecto)
-    print('actualiza balance')
     # Actualizas balance
     proyecto = db_proyectos.find_one({'_id': ObjectId(id)})
     data_balance = string_to_int(data_balance)
@@ -602,7 +613,6 @@ def cerrar_presupuesto(user):
                             "$set": {"balance": balance}})
 
     # Agregas la accion a las actividades
-    print('agrega accion a la actividad')
     data_acciones = {}
     data_acciones["project_id"] = ObjectId(id)
     data_acciones['user'] = user["nombre"]
@@ -615,7 +625,6 @@ def cerrar_presupuesto(user):
 
     archivos = request.files.getlist('files')
     archivos_guardados = []
-    print('guarda archivo')
     # Guardar los archivos en las subcarpetas del proyecto
     for archivo in archivos:
         # Obtener el nombre del archivo
@@ -644,8 +653,33 @@ def cerrar_presupuesto(user):
     return jsonify({'mensaje': 'proyecto ajustado exitosamente'}), 201
 
 
-# TODO:
-# Falta agregar cambio del token al logger
+@app.route("/documento_eliminar", methods=["POST"])
+@allow_cors
+@token_required
+def eliminar_presupuesto(user):
+    data = request.get_json()
+    presupuesto_id = data["budget_id"]
+    id = data["project_id"]
+    documento = db_documentos.find_one({'_id': ObjectId(presupuesto_id)})
+    if documento is None:
+        return jsonify({"message": "Presupuesto no encontrado"}), 404
+
+    descripcion = documento["descripcion"]
+    monto = documento["monto"]
+    if documento["status"] == "finished":
+        return jsonify({'mensaje': 'Presupuesto esta finalizado, no se puede eliminar'}), 401
+    import pdb
+    pdb.set_trace()
+
+    result = db_documentos.delete_one({'_id': ObjectId(presupuesto_id)})
+    if result.deleted_count == 1:
+        message_log = f'{user["nombre"]} elimino el presupuesto {descripcion} con un monto de ${int_to_string(monto)}'
+        agregar_log(id, message_log)
+
+        return jsonify({"message": "Solicitud de regla eliminada con éxito"}), 200
+    else:
+        return jsonify({"message": "No se pudo eliminar la regla"}), 400
+
 
 @app.route("/finalizar_proyecto", methods=["POST"])
 @allow_cors
