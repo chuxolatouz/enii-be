@@ -57,7 +57,7 @@ def actualizar_pasos(status, paso):
     "Status 3: Agregar Lider"
     "Status 4: Agregar Regla de Distribucion"
     "Status 5: Agregar Regla fija"
-    "Status 6: Completado"
+    "Status 6: Configurado"
     "-----------------------"
     new_status = status
     if paso > status["actual"]:

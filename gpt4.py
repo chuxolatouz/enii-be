@@ -668,8 +668,6 @@ def eliminar_presupuesto(user):
     monto = documento["monto"]
     if documento["status"] == "finished":
         return jsonify({'mensaje': 'Presupuesto esta finalizado, no se puede eliminar'}), 401
-    import pdb
-    pdb.set_trace()
 
     result = db_documentos.delete_one({'_id': ObjectId(presupuesto_id)})
     if result.deleted_count == 1:
@@ -681,48 +679,68 @@ def eliminar_presupuesto(user):
         return jsonify({"message": "No se pudo eliminar la regla"}), 400
 
 
+@app.route("/eliminar_proyecto", methods=["POST"])
+@allow_cors
+@token_required
+def eliminar_proyecto(user):
+    data = request.get_json()
+    id = data["proyecto_id"]
+    documento = db_proyectos.find_one({'_id': ObjectId(id)})
+    if documento is None:
+        return jsonify({"message": "Proyecto no encontrado"}), 404
+
+    result = db_proyectos.delete_one({'_id': ObjectId(id)})
+    if result.deleted_count == 1:
+        return jsonify({"message": "Proyecto eliminado con éxito"}), 200
+    else:
+        return jsonify({"message": "No se pudo eliminar la regla"}), 400
+
+
 @app.route("/finalizar_proyecto", methods=["POST"])
 @allow_cors
-def finalizar_proyecto():
+@token_required
+def finalizar_proyecto(user):
+
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
     if proyecto is None:
         return jsonify({"message": "Proyecto no encontrado"}), 404
     balance = proyecto["balance"]
-    reglas = proyecto.get("reglas_distribucion", [])
-    if len(reglas) == 0:
-        return jsonify({"message": "No se han establecido reglas de distribución"}), 400
-    total_porcentaje = sum([r["porcentaje"] for r in reglas])
-    if total_porcentaje != 100:
-        return jsonify({"message": "La suma de los porcentajes de reglas debe ser igual a 100"}), 400
+    reglas = proyecto["reglas"]
+    if len(dir(reglas)) == 0:
+        return jsonify({"message": "No se han establecido reglas de distribución"}), 404
+
+    if sum(reglas.values()) != 100:
+        return jsonify({"message": "La suma de los porcentajes de reglas debe ser igual a 100"}), 401
     miembros = proyecto.get("miembros", [])
     if len(miembros) == 0:
-        return jsonify({"message": "No hay miembros asignados al proyecto"}), 400
-    distribucion = []
-    for r in reglas:
-        cantidad = math.floor(balance * r["porcentaje"] / 100)
-        if r["tipo"] == "igual":
-            cantidad_miembros = len(miembros)
-            cantidad_por_miembro = math.floor(cantidad / cantidad_miembros)
-            for m in miembros:
-                distribucion.append(
-                    {"miembro": m, "cantidad": cantidad_por_miembro})
-        elif r["tipo"] == "proporcional":
-            total_contribucion = sum([r.get(str(m), 0) for m in miembros])
-            for m in miembros:
-                contribucion = r.get(str(m), 0)
-                if total_contribucion > 0:
-                    cantidad_miembro = math.floor(
-                        cantidad * contribucion / total_contribucion)
-                else:
-                    cantidad_miembro = 0
-                distribucion.append(
-                    {"miembro": m, "cantidad": cantidad_miembro})
+        return jsonify({"message": "No hay miembros asignados al proyecto"}), 404
+        # 1. Calculate the percentage distribution for each role:
+    distribucion = {
+        role: (percentage / 100) * balance for role, percentage in reglas.items()
+    }
+
+    # 2. Create an empty list to store the budget-assigned members:
+    budgeted_members = []
+
+    # 3. Iterate through each member and assign their budget:
+    for member in miembros:  # Using "miembros" instead of "members"
+        member_role = member.get("role")
+        member_role_value = member_role.get("value")
+        if member_role_value in distribucion:
+            member_budget = distribucion[member_role_value]
+            budgeted_members.append(
+                {"role": member_role, "budget": member_budget})
+        else:
+            print(
+                f"Warning: No rule found for role '{member_role_value}'. Budget not assigned.")
+    new_status = actualizar_pasos(proyecto["status"], 6)
+    new_status["finished"] = True
     db_proyectos.update_one({"_id": ObjectId(proyecto_id)}, {
-                            "$set": {"status": "finished", "distribucion_recursos": distribucion}})
+                            "$set": {"status": new_status, "distribucion_recursos": budgeted_members}})
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
-    message_log = 'usuario finalizo el proyecto'
+    message_log = f'{user["nombre"]} finalizó el proyecto'
     agregar_log(proyecto_id, message_log)
 
     return jsonify({"message": "Proyecto finalizado con éxito", "proyecto": proyecto}), 200
@@ -788,7 +806,34 @@ def mostrar_reglas_fijas(user):
         request_list=list_json,
     )
 
-    return list_json
+    return list_json, 200
+
+
+@app.route("/proyecto/<string:id>/fin", methods=["GET"])
+@allow_cors
+def mostrar_finalizacion(id):
+    id = ObjectId(id)
+    movs = db_acciones.find({'project_id': id})
+    docs = db_documentos.find({'project_id': id})
+    logs = db_logs.find({'id_proyecto': id})
+
+    movs_cursor = list(movs)
+    movs_dump = json_util.dumps(movs_cursor)
+    movs_json = json.loads(movs_dump.replace('\\', ''))
+
+    docs_cursor = list(docs)
+    docs_dump = json_util.dumps(docs_cursor)
+    docs_json = json.loads(docs_dump.replace('\\', ''))
+
+    logs_cursor = list(logs)
+    logs_dump = json_util.dumps(logs_cursor)
+    list_json = json.loads(logs_dump.replace('\\', ''))
+    data_response = jsonify(
+        logs=list_json,
+        documentos=docs_json,
+        movimientos=movs_json
+    )
+    return data_response, 200
 
 
 @app.route("/asignar_regla_fija/", methods=["POST"])
