@@ -1,9 +1,9 @@
 {
   "version": 2,
   "builds": [
-    { "src": "gpt.py", "use": "@vercel/python" }
+    { "src": "gpt4.py", "use": "@vercel/python" }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "/gpt.py" }
+    { "src": "/(.*)", "dest": "./gpt4.py" }
   ]
 }
