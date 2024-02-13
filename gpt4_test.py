@@ -1,5 +1,6 @@
 import unittest
-from gpt4 import app
+from api.gpt4 import app
+
 
 class TestApp(unittest.TestCase):
 
@@ -39,6 +40,7 @@ class TestApp(unittest.TestCase):
         response = self.app.post("/login", json=data)
         self.assertEqual(response.status_code, 401)
         self.assertIn(b"Credenciales invalidas", response.data)
+
 
 if __name__ == "__main__":
     unittest.main()

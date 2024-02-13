@@ -4,8 +4,8 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from datetime import datetime
 from bson import ObjectId, json_util
-from decorators import validar_datos, allow_cors, token_required
-from utils import string_to_int, int_to_string, generar_token, map_to_doc, actualizar_pasos
+from .util.decorators import validar_datos, allow_cors, token_required
+from .util.utils import string_to_int, int_to_string, generar_token, map_to_doc, actualizar_pasos
 import json
 import random
 import math
@@ -909,11 +909,13 @@ def error_401(e):
 
 @app.errorhandler(404)
 def error_404(e):
+    print(e)
     return jsonify({"message": "No encontrado"}), 404
 
 
 @app.errorhandler(500)
 def error_500(e):
+    print(e)
     return jsonify({"message": "Error interno del servidor"}), 500
 
 
