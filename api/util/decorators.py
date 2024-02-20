@@ -1,5 +1,5 @@
 from flask import make_response, request, jsonify, current_app
-import jwt
+from jose import jwt
 from functools import wraps
 
 
@@ -38,9 +38,14 @@ def token_required(f):
 
         try:
             token = token.split()[1]
+            print('decorator token required')
+            print(token)
             data = jwt.decode(
-                token, current_app.config["SECRET_KEY"], algorithms=['HS256'])
-        except:
+                token, key=current_app.config["SECRET_KEY"], algorithms=['HS256'])
+            print(data)
+        except Exception as e:
+            print("Error decoding token: %s", str(e))
+
             return jsonify({"message": "Token no es válido o ha expirado"}), 403
 
         return f(data, *args, **kwargs)

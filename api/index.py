@@ -13,7 +13,7 @@ import string
 import os
 
 app = Flask(__name__)
-app.config["MONGO_URI"] = "mongodb://localhost:27017/mi_db"
+app.config["MONGO_URI"] = "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
 app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
@@ -93,7 +93,7 @@ def login():
         return jsonify({
             "token": token,
             "email": data["email"],
-            "id": usuario["_id"],
+            "id": str(usuario["_id"]),
             "role": "admin"
         }), 200
     else:

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-import jwt
+from jose import jwt
 
 
 def int_to_string(int_number):
@@ -29,13 +29,16 @@ def string_to_int(string_float):
 
 
 def generar_token(usuario, secret):
+    now = datetime.now()
+    thirty_days_later = now + timedelta(days=30)
     payload = {
         "sub": str(usuario["_id"]),
         "email": usuario["email"],
         "nombre": usuario["nombre"],
-        "exp": datetime.utcnow() + timedelta(days=30)
+        "exp": int(thirty_days_later.timestamp())
     }
-    token = jwt.encode(payload, secret, algorithm="HS256")
+    token = jwt.encode(payload, secret, algorithm='HS256')
+    print(token)
     return token
 
 
