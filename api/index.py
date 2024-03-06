@@ -1,16 +1,19 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_pymongo import PyMongo
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from datetime import datetime
 from bson import ObjectId, json_util
-from .util.decorators import validar_datos, allow_cors, token_required
-from .util.utils import string_to_int, int_to_string, generar_token, map_to_doc, actualizar_pasos
+# from cloudinary import config, api, uploader
+from b2sdk.v2 import (B2Api, InMemoryAccountInfo)
+from util.decorators import validar_datos, allow_cors, token_required
+from util.utils import string_to_int, int_to_string, generar_token, map_to_doc, actualizar_pasos, auth_account
 import json
 import random
 import math
 import string
 import os
+from io import BytesIO
 
 app = Flask(__name__)
 app.config["MONGO_URI"] = "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
@@ -18,6 +21,16 @@ app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
 CORS(app)
+
+info = InMemoryAccountInfo()
+b2_api = B2Api(account_info=info)
+
+# config(
+#     cloud_name="dnfl6l0xp",
+#     api_key="734477293158223",
+#     api_secret="Xh4crQOUXkMG2TaMC_OT4yBx5Wc",
+#     secure=True
+# )
 
 db_usuarios = mongo.db.usuarios
 db_proyectos = mongo.db.proyectos
@@ -505,6 +518,7 @@ def proyecto(id):
     balance = int_to_string(proyecto['balance'])
     balance_inicial = int_to_string(proyecto['balance_inicial'])
     proyecto['balance'] = balance
+    proyecto['owner'] = str(proyecto['owner'])
     proyecto['balance_inicial'] = balance_inicial
 
     # Devolver el proyecto como una respuesta JSON
@@ -540,55 +554,91 @@ def mostrar_documentos_proyecto(id):
 @allow_cors
 @token_required
 def crear_presupuesto(user):
-    # Obtener la ruta de la carpeta del proyecto
-    id = request.form.get('proyecto_id')
-    carpeta_proyecto = os.path.join('files', id)
+    # Get project ID and other details from request
+    project_id = request.form.get('proyecto_id')
     descripcion = request.form.get('descripcion')
     monto = request.form.get('monto')
 
-    # Crear la carpeta del proyecto si no existe
-    if not os.path.exists(carpeta_proyecto):
-        os.makedirs(carpeta_proyecto)
+    # Validate required fields
+    if not project_id or not descripcion or not monto:
+        return jsonify({'error': 'Missing required fields'}), 400
 
-    # Crear el documento del presupuesto
+    # Generate unique presupuesto ID
+    presupuesto_id = str(ObjectId())
 
+    # Create folders with project ID and presupuesto ID in Cloudinary
+    folder_path = f"{project_id}/{presupuesto_id}"
+    # try:
+    #     print('Folder Path')
+    #     print(folder_path)
+    #     api.create_folder(path=folder_path)
+    # except Exception as e:
+    #     print(f"Error creating folder: {e}")
+    #     return jsonify({'error': 'Error creating folders'}), 400
+
+    # Create budget object
     presupuesto = {
-        'project_id': ObjectId(id),
+        'project_id': ObjectId(project_id),
+        'presupuesto_id': presupuesto_id,
         'descripcion': descripcion,
+        # Replace with your string to int conversion function
         'monto': string_to_int(monto),
         'status': 'new',
         'archivos': []
     }
 
-    # Obtener los archivos del formulario
+    # Get uploaded files from request
     archivos = request.files.getlist('files')
 
-    # Guardar los archivos en las subcarpetas del proyecto
+    # Track successfully uploaded files and error messages
+    uploaded_files = []
+    error_messages = []
+
+    # Upload files to Cloudinary within presupuesto folder
     for archivo in archivos:
-        # Obtener el nombre del archivo
-        nombre_archivo = archivo.filename
+        # Generate unique public ID (optional)
+        public_id = f"budgets/{folder_path}/{archivo.filename}"
 
-        # Crear la carpeta del presupuesto
-        presupuesto_id = str(ObjectId())
-        carpeta_presupuesto = os.path.join(carpeta_proyecto, presupuesto_id)
-        os.makedirs(carpeta_presupuesto)
+        # Upload file to Cloudinary
+        auth_account(b2_api)
+        bucket = b2_api.get_bucket_by_id("d4ea8d3dcc4e0ff288e40d13")
 
-        # Guardar el archivo en la carpeta del presupuesto
-        archivo.save(os.path.join(carpeta_presupuesto, nombre_archivo))
+        file_buffer = BytesIO(archivo.read())
+        file_data = file_buffer.read()
+        upload_result = bucket.upload_bytes(file_data, file_name=public_id)
 
-        # Agregar el archivo al arreglo de archivos del presupuesto
-        presupuesto['archivos'].append({
-            'nombre': nombre_archivo,
-            'ruta': os.path.join(carpeta_presupuesto, nombre_archivo)
-        })
+        if upload_result is not None:
+            uploaded_files.append(upload_result.id_)
+            presupuesto['archivos'].append({
+                'nombre': archivo.filename,
+                'public_id': upload_result.id_
+            })
+        else:
+            error_messages.append(
+                f"Error uploading file {archivo.filename}: {upload_result['error']}")
+
+    # Handle upload errors (if any)
+    if error_messages:
+        # Delete successfully uploaded files if any
+        # for uploaded_file in uploaded_files:
+        #     api.destroy(public_id=uploaded_file)
+
+        # Return error response with messages
+        return jsonify({'error': error_messages}), 400
+
+    # Insert presupuesto object into database
     result = db_documentos.insert_one(presupuesto)
-    message_log = f'{user["nombre"]} agrego el presupuesto {descripcion} con un monto de ${monto}'
-    agregar_log(id, message_log)
 
-    if result.acknowledged:
-        return jsonify({'mensaje': 'Archivos subidos exitosamente'}), 201
-    else:
-        return jsonify({'error': 'Error al subir archivos'}), 404
+    # Handle database errors
+    if not result.acknowledged:
+        return jsonify({'error': 'Error saving presupuesto'}), 500
+
+    # Log document creation
+    message_log = f'{user["nombre"]} agrego el presupuesto {descripcion} con un monto de ${monto}'
+    agregar_log(project_id, message_log)
+
+    # Return success response
+    return jsonify({'mensaje': 'Archivos subidos exitosamente'}), 201
 
 
 @app.route('/documento_cerrar', methods=['POST'])

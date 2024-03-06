@@ -72,3 +72,9 @@ def actualizar_pasos(status, paso):
         new_status["completado"].append(paso)
 
     return new_status
+
+
+def auth_account(b2_api):
+    auth = b2_api.authorize_account("production", "0054addcef284d30000000002",
+                                    "K005xSlLQhiwP7QZsQOXxe7k2HH+WHk")
+    return auth
