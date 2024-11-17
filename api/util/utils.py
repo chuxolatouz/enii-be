@@ -38,7 +38,6 @@ def generar_token(usuario, secret):
         "exp": int(thirty_days_later.timestamp())
     }
     token = jwt.encode(payload, secret, algorithm='HS256')
-    print(token)
     return token
 
 

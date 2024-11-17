@@ -16,7 +16,8 @@ import os
 from io import BytesIO
 
 app = Flask(__name__)
-app.config["MONGO_URI"] = "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
+# app.config["MONGO_URI"] = "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
+app.config["MONGO_URI"] = "mongodb://localhost:27017/mi_db"
 app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
@@ -522,6 +523,9 @@ def proyecto(id):
     proyecto['balance_inicial'] = balance_inicial
 
     # Devolver el proyecto como una respuesta JSON
+    if "regla_fija" in proyecto:
+        proyecto["regla_fija"]["_id"] = str(proyecto["regla_fija"]["_id"])
+    print(proyecto)
     return jsonify(proyecto)
 
 
@@ -793,7 +797,7 @@ def finalizar_proyecto(user):
     message_log = f'{user["nombre"]} finalizó el proyecto'
     agregar_log(proyecto_id, message_log)
 
-    return jsonify({"message": "Proyecto finalizado con éxito", "proyecto": proyecto}), 200
+    return jsonify({"message": "Proyecto finalizado con éxito"}), 200
 
 
 @app.route("/proyecto/<string:id>/logs", methods=["GET"])

@@ -38,8 +38,6 @@ def token_required(f):
 
         try:
             token = token.split()[1]
-            print('decorator token required')
-            print(token)
             data = jwt.decode(
                 token, key=current_app.config["SECRET_KEY"], algorithms=['HS256'])
             print(data)
