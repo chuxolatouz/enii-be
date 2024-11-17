@@ -1,9 +1,13 @@
 b2sdk==1.31.0
 bcrypt==4.1.2
 blinker==1.7.0
+<<<<<<< Updated upstream
 certifi==2024.2.2
 cffi==1.16.0
 charset-normalizer==3.3.2
+=======
+#cffi==1.16.0
+>>>>>>> Stashed changes
 click==8.1.7
 cryptography==42.0.2
 dnspython==2.5.0
