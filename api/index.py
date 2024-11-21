@@ -16,12 +16,12 @@ import os
 from io import BytesIO
 
 app = Flask(__name__)
-# app.config["MONGO_URI"] = "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
-app.config["MONGO_URI"] = "mongodb://localhost:27017/mi_db"
+app.config["MONGO_URI"] = "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
+# app.config["MONGO_URI"] = "mongodb://localhost:27017/mi_db"
 app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
-CORS(app)
+CORS(app, supports_credentials=True)
 
 info = InMemoryAccountInfo()
 b2_api = B2Api(account_info=info)
@@ -461,10 +461,28 @@ def mostrar_proyectos(user):
     params = request.args
     skip = int(params.get('page')) if params.get('page') else 0
     limit = params.get('limit') if params.get('limit') else 10
-    # query = {"_id": ObjectId(request_id)}
+    query = {
+        "$or": [
+            {"owner": user["sub"]},  # Check for project owner
+            {
+                "miembros": {
+                    "$elemMatch": {  # Check for membership in any project
+                        "usuario._id.$oid": user["sub"]  # Match user ID
+                    }
+                }
+            }
+        ]
+    }
+    if "is_admin" in user and user["is_admin"]:
+        query = {}
+
+    # Optional: Projection to exclude password field
+    projection = {"miembros.usuario.password": 0}  # Exclude password
+
     list_verification_request = db_proyectos.find(
-        {}).skip(skip * limit).limit(limit)
-    quantity = db_proyectos.count_documents({})
+        query, projection=projection).skip(skip).limit(limit)
+
+    quantity = db_proyectos.count_documents(query)
     list_cursor = list(list_verification_request)
     list_dump = json_util.dumps(list_cursor)
     # Remover las barras invertidas
