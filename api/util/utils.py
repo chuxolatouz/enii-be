@@ -12,7 +12,7 @@ def int_to_string(int_number):
     # Formateamos el número como una cadena de caracteres con dos decimales
     string_float = "{:.2f}".format(float_number)
     # Reemplazamos el punto por una coma para el formato deseado
-    string_float = string_float.replace('.', ',')
+    string_float = string_float.replace(".", ",")
     return string_float
 
 
@@ -22,7 +22,7 @@ def string_to_int(string_float):
     Devuelve un entero que representa el número multiplicado por 100.
     """
     # Reemplazamos la coma por un punto para poder convertirlo a flotante
-    float_number = float(string_float.replace(',', '.'))
+    float_number = float(string_float.replace(",", "."))
     # Multiplicamos el número por 100 y lo convertimos a entero
     int_number = int(float_number * 100)
     return int_number
@@ -35,15 +35,16 @@ def generar_token(usuario, secret):
         "sub": str(usuario["_id"]),
         "email": usuario["email"],
         "nombre": usuario["nombre"],
-        "exp": int(thirty_days_later.timestamp())
+        "role": "admin" if usuario.get("is_admin") else "usuario",
+        "exp": int(thirty_days_later.timestamp()),
     }
-    token = jwt.encode(payload, secret, algorithm='HS256')
+    token = jwt.encode(payload, secret, algorithm="HS256")
     return token
 
 
 def map_to_doc(document):
-    document['amount'] = int_to_string(document["amount"])
-    document['total_amount'] = int_to_string(document["total_amount"])
+    document["amount"] = int_to_string(document["amount"])
+    document["total_amount"] = int_to_string(document["total_amount"])
     return document
 
 
@@ -74,6 +75,7 @@ def actualizar_pasos(status, paso):
 
 
 def auth_account(b2_api):
-    auth = b2_api.authorize_account("production", "0054addcef284d30000000002",
-                                    "K005xSlLQhiwP7QZsQOXxe7k2HH+WHk")
+    auth = b2_api.authorize_account(
+        "production", "0054addcef284d30000000002", "K005xSlLQhiwP7QZsQOXxe7k2HH+WHk"
+    )
     return auth
