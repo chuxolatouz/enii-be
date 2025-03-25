@@ -176,8 +176,10 @@ def obtener_categorias():
         )
     else:
         cursor = db_categorias.find()
+    
     list_cursor = list(cursor)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
+    print(list_dump)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     return jsonify(list_json), 200
@@ -430,7 +432,7 @@ def asignar_balance(user):
 def roles():
     roles = db_roles.find({})
     list_cursor = list(roles)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(list_json)
@@ -456,7 +458,7 @@ def mostrar_usuarios():
     list_users = db_usuarios.find().skip(skip * limit).limit(limit)
     quantity = db_usuarios.count_documents(query)
     list_cursor = list(list_users)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(request_list=list_json, count=quantity)
@@ -496,7 +498,7 @@ def mostrar_proyectos(user):
 
     quantity = db_proyectos.count_documents(query)
     list_cursor = list(list_verification_request)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(request_list=list_json, count=quantity)
@@ -516,7 +518,7 @@ def acciones_proyecto(id):
     quantity = db_acciones.count_documents({"project_id": id}) / 10
     quantity = math.ceil(quantity)
     list_cursor = list(acciones)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(request_list=list_json, count=quantity)
@@ -564,7 +566,7 @@ def mostrar_documentos_proyecto(id):
     quantity = db_documentos.count_documents({"project_id": id}) / 10
     quantity = math.ceil(quantity)
     list_cursor = list(documentos)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(request_list=list_json, count=quantity)
@@ -846,7 +848,7 @@ def obtener_logs(id):
     quantity = math.ceil(quantity)
 
     list_cursor = list(acciones)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(request_list=list_json, count=quantity)
@@ -866,7 +868,7 @@ def mostrar_solicitudes(user):
     list_verification_request = db_solicitudes.find({}).skip(skip * limit).limit(limit)
     quantity = db_solicitudes.count_documents({})
     list_cursor = list(list_verification_request)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(request_list=list_json, count=quantity)
@@ -879,7 +881,7 @@ def mostrar_solicitudes(user):
 def mostrar_reglas_fijas(user):
     list_request = db_solicitudes.find({"status": "completed"})
     list_cursor = list(list_request)
-    list_dump = json_util.dumps(list_cursor)
+    list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
     list_json = json.loads(list_dump.replace("\\", ""))
     list_json = jsonify(
         request_list=list_json,
