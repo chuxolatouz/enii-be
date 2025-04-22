@@ -5,7 +5,7 @@ from flask_cors import CORS
 from datetime import datetime
 from bson import ObjectId, json_util
 
-# from cloudinary import config, api, uploader
+
 from b2sdk.v2 import B2Api, InMemoryAccountInfo
 from util.decorators import validar_datos, allow_cors, token_required
 from util.utils import (
@@ -15,7 +15,10 @@ from util.utils import (
     map_to_doc,
     actualizar_pasos,
     auth_account,
+    generar_csv,
+    generar_json
 )
+from flasgger import Swagger
 import json
 import random
 import math
@@ -23,7 +26,13 @@ import string
 import os
 from io import BytesIO
 
+### Swagger UI configuration ###f
+SWAGGER_URL = '/swagger'   # URL for exposing Swagger UI (without trailing slash)
+API_URL = '/swagger.json'  # Our API url route
+
 app = Flask(__name__)
+Swagger(app)
+
 app.config["MONGO_URI"] = (
     "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
 )
@@ -90,6 +99,40 @@ app.json_encoder = JSONEncoder
 @app.route("/registrar", methods=["POST"])
 @validar_datos({"nombre": str, "email": str, "password": str})
 def registrar():
+    """
+    Endpoint para registrar una persona en la plataforma.
+    ---
+    tags:
+      - Usuarios
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            nombre:
+              type: string
+              example: "Juan"
+            email:
+              type: string
+              example: "juan@example.com"
+            password:
+              type: string
+              example: "password123"
+    responses:
+      201:
+        description: Usuario registrado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Usuario registrado con éxito"
+      400:
+        description: Error en los datos enviados.
+    """
+
     data = request.get_json()
     hashed_pw = bcrypt.generate_password_hash(data["password"])
     data["password"] = hashed_pw
@@ -99,7 +142,49 @@ def registrar():
 
 @app.route("/login", methods=["POST"])
 @validar_datos({"email": str, "password": str})
-def login():
+def login():   
+    """
+    Endpoint para iniciar sesión en la plataforma.
+    ---
+    tags:
+      - Usuarios
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+              example: "juan@example.com"
+            password:
+              type: string
+              example: "password123"
+    responses:
+      200:
+        description: Inicio de sesión exitoso.
+        schema:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            email:
+              type: string
+              example: "juan@example.com"
+            id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            nombre:
+              type: string
+              example: "Juan"
+            role:
+              type: string
+              example: "usuario"
+      401:
+        description: Credenciales inválidas.
+    """
     data = request.get_json()
     usuario = db_usuarios.find_one({"email": data["email"]})
 
@@ -121,6 +206,33 @@ def login():
 
 @app.route("/olvido_contraseña", methods=["POST"])
 def olvido_contraseña():
+    """
+    Endpoint para solicitar restablecimiento de contraseña.
+    ---
+    tags:
+      - Usuarios
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+              example: "juan@example.com"
+    responses:
+      200:
+        description: Email enviado para restablecer la contraseña.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Se ha enviado un email electrónico para restablecer la contraseña"
+      404:
+        description: Email no registrado.
+    """
     data = request.get_json()
     usuario = db_usuarios.find_one({"email": data["email"]})
     if usuario:
@@ -890,6 +1002,25 @@ def mostrar_reglas_fijas(user):
     return list_json, 200
 
 
+@app.route("/proyecto/<string:id>/movimientos/descargar", methods=["GET"])
+@allow_cors
+def descargar_movimientos(id):
+    id_proyecto = ObjectId(id)
+
+    # 1. Recuperar los movimientos del proyecto desde la base de datos
+    movimientos = db_acciones.find({"project_id": id_proyecto})
+    movimientos_lista = list(movimientos)
+
+    # 2. Determinar el formato de descarga (CSV o JSON)
+    formato = request.args.get("formato", "csv").lower()  # Por defecto a CSV
+
+    if formato == "csv":
+        return generar_csv(movimientos_lista)
+    elif formato == "json":
+        return generar_json(movimientos_lista)
+    else:
+        return jsonify({"error": "Formato no válido. Use 'csv' o 'json'."}), 400
+
 @app.route("/proyecto/<string:id>/fin", methods=["GET"])
 @allow_cors
 def mostrar_finalizacion(id):
@@ -973,6 +1104,16 @@ def asignar_regla_fija(user):
 @app.route("/", methods=["GET"])
 @allow_cors
 def index():
+    """
+    Endpoint para saber si el servidor está aceptando requests.
+    ---
+    responses:
+      200:
+        description: retorna un string llamado pong porque le estás haciendo ping
+        schema:
+            type: string
+            example: "pong"
+    """
     return "pong"
 
 

@@ -31,3 +31,6 @@ urllib3<2.0
 six==1.16.0
 Werkzeug==3.0.1
 zipp==3.17.0
+jsonschema==4.17.3
+referencing==0.28.0
+flasgger==0.9.7b2

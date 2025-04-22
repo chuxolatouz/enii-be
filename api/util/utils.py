@@ -1,5 +1,10 @@
 from datetime import datetime, timedelta
 from jose import jwt
+from bson import ObjectId, json_util
+from io import StringIO, BytesIO
+from flask import send_file
+import csv  # Para CSV
+import json
 
 
 def int_to_string(int_number):
@@ -79,3 +84,56 @@ def auth_account(b2_api):
         "production", "0054addcef284d30000000002", "K005xSlLQhiwP7QZsQOXxe7k2HH+WHk"
     )
     return auth
+
+def generar_csv(movimientos):
+    si = StringIO()  # Usar StringIO en lugar de BytesIO para texto
+    cw = csv.writer(si)
+
+    # Escribir la fila de encabezado
+    cw.writerow([
+        "Tipo",
+        "Usuario",
+        "Monto",
+        "Monto Total",
+        # ... Agrega aquí otros campos que desees incluir
+    ])
+
+    # Escribir los datos de los movimientos
+    for mov in movimientos:
+        cw.writerow([
+            mov.get("type", ""),
+            mov.get("user", ""),
+            int_to_string(mov.get("amount", 0)),  # Formatear el monto
+            int_to_string(mov.get("total_amount", 0)),  # Formatear el monto total
+            # ... Agrega aquí otros campos que desees incluir
+        ])
+
+    output = si.getvalue()
+    return send_file(
+        BytesIO(output.encode()),  # Convertir a BytesIO
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=f"movimientos_proyecto.csv"  # Nombre del archivo
+    )
+
+def generar_json(movimientos):
+    # Convertir los ObjectId a cadenas y formatear los montos
+    movimientos_serializables = []
+    for mov in movimientos:
+        mov_serializable = {}
+        for key, value in mov.items():
+            if isinstance(value, ObjectId):
+                mov_serializable[key] = str(value)
+            elif key in ("amount", "total_amount"):
+                mov_serializable[key] = int_to_string(value)
+            else:
+                mov_serializable[key] = value
+        movimientos_serializables.append(mov_serializable)
+
+    json_output = json.dumps(movimientos_serializables, ensure_ascii=False, default=json_util.default)
+    return send_file(
+        BytesIO(json_output.encode('utf-8')),
+        mimetype="application/json",
+        as_attachment=True,
+        download_name="movimientos_proyecto.json"
+    )
