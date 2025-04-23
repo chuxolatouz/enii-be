@@ -249,17 +249,80 @@ def olvido_contraseña():
 @app.route("/editar_usuario/<id_usuario>", methods=["PUT"])
 @token_required
 def editar_usuario(id_usuario):
+    """
+    Endpoint para editar la información de un usuario.
+    ---
+    tags:
+      - Usuarios
+    parameters:
+      - in: path
+        name: id_usuario
+        required: true
+        description: ID del usuario a editar.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: body
+        name: body
+        required: true
+        description: Datos a actualizar del usuario.
+        schema:
+          type: object
+          properties:
+            nombre:
+              type: string
+              example: "Juan Actualizado"
+            email:
+              type: string
+              example: "juan_actualizado@example.com"
+    responses:
+      200:
+        description: Información de usuario actualizada con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Información de usuario actualizada con éxito"
+      404:
+        description: Usuario no encontrado.
+    """
     data = request.get_json()
     db_usuarios.update_one({"_id": ObjectId(id_usuario)}, {"$set": data})
     return jsonify({"message": "Información de usuario actualizada con éxito"}), 200
 
 
-# ... Agregar otros endpoints (iniciar sesión, olvido contraseña, editar información de usuario, etc.) ...
-
-
 @app.route("/eliminar_usuario", methods=["POST"])
 @token_required
 def eliminar_usuario(user):
+    """
+    Endpoint para eliminar un usuario.
+    ---
+    tags:
+      - Usuarios
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: ID del usuario a eliminar.
+        schema:
+          type: object
+          properties:
+            id_usuario:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+    responses:
+      200:
+        description: Usuario eliminado exitosamente.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Usuario eliminado éxitosamente"
+      400:
+        description: No se pudo eliminar el usuario.
+    """
     data = request.get_json()
     id_usuario = data["id_usuario"]
     result = db_usuarios.delete_one({"_id": ObjectId(id_usuario)})
@@ -273,6 +336,37 @@ def eliminar_usuario(user):
 @app.route("/crear_rol", methods=["POST"])
 @token_required
 def crear_rol():
+    """
+    Endpoint para crear un nuevo rol.
+    ---
+    tags:
+      - Roles
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos del rol a crear.
+        schema:
+          type: object
+          properties:
+            nombre:
+              type: string
+              example: "Administrador"
+            permisos:
+              type: array
+              items:
+                type: string
+              example: ["crear_usuario", "editar_usuario"]
+    responses:
+      201:
+        description: Rol creado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Rol creado con éxito"
+    """
     data = request.get_json()
     db_roles.insert_one(data)
     return jsonify({"message": "Rol creado con éxito"}), 201
@@ -281,6 +375,37 @@ def crear_rol():
 @app.route("/mostrar_categorias", methods=["GET"])
 @allow_cors
 def obtener_categorias():
+    """
+    Endpoint para obtener una lista de categorías.
+    ---
+    tags:
+      - Categorías
+    parameters:
+      - in: query
+        name: text
+        required: false
+        description: Texto para filtrar las categorías por nombre.
+        schema:
+          type: string
+          example: "educación"
+    responses:
+      200:
+        description: Lista de categorías obtenida con éxito.
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              _id:
+                type: string
+                example: "64b8f3e2c9d1a2b3c4d5e6f7"
+              nombre:
+                type: string
+                example: "Educación"
+              color:
+                type: string
+                example: "#FF5733"
+    """
     search_text = request.args.get("text")
     if search_text:
         cursor = db_categorias.find(
@@ -301,6 +426,38 @@ def obtener_categorias():
 @allow_cors
 @validar_datos({"nombre": str})
 def crear_categorias():
+    """
+    Endpoint para crear una nueva categoría.
+    ---
+    tags:
+      - Categorías
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos de la categoría a crear.
+        schema:
+          type: object
+          properties:
+            nombre:
+              type: string
+              example: "Educación"
+    responses:
+      201:
+        description: Categoría creada con éxito.
+        schema:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            nombre:
+              type: string
+              example: "Educación"
+            color:
+              type: string
+              example: "#FF5733"
+    """
     data = request.get_json()
     nombre = data["nombre"]
     color = "".join(random.choices(string.hexdigits[:-6], k=6))
@@ -313,6 +470,35 @@ def crear_categorias():
 @app.route("/asignar_rol", methods=["PATCH"])
 @token_required
 def asignar_rol():
+    """
+    Endpoint para asignar un rol a un usuario.
+    ---
+    tags:
+      - Roles
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para asignar el rol.
+        schema:
+          type: object
+          properties:
+            user_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            rol_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f8"
+    responses:
+      200:
+        description: Rol asignado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Rol asignado con éxito"
+    """
     data = request.get_json()
     user_id = data["user_id"]
     rol_id = data["rol_id"]
@@ -328,6 +514,35 @@ def asignar_rol():
     {"nombre": str, "descripcion": str, "fecha_inicio": str, "fecha_fin": str}
 )
 def crear_proyecto(user):
+    """
+    Endpoint para asignar un rol a un usuario.
+    ---
+    tags:
+      - Roles
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para asignar el rol.
+        schema:
+          type: object
+          properties:
+            user_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            rol_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f8"
+    responses:
+      200:
+        description: Rol asignado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Rol asignado con éxito"
+    """
     current_user = user["sub"]
     data = request.get_json()
     data["miembros"] = []
@@ -349,6 +564,50 @@ def crear_proyecto(user):
     {"nombre": str, "descripcion": str, "fecha_inicio": str, "fecha_fin": str}
 )
 def actualizar_proyecto(user, project_id):
+    """
+    Endpoint para actualizar un proyecto existente.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        description: ID del proyecto a actualizar.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: body
+        name: body
+        required: true
+        description: Datos a actualizar del proyecto.
+        schema:
+          type: object
+          properties:
+            nombre:
+              type: string
+              example: "Proyecto A Actualizado"
+            descripcion:
+              type: string
+              example: "Descripción actualizada del proyecto A"
+            fecha_inicio:
+              type: string
+              example: "2025-05-01"
+            fecha_fin:
+              type: string
+              example: "2025-12-31"
+    responses:
+      200:
+        description: Proyecto actualizado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Proyecto actualizado con éxito"
+      404:
+        description: Proyecto no encontrado.
+    """
     current_user = user["sub"]
     data = request.get_json()
 
@@ -378,6 +637,52 @@ def actualizar_proyecto(user, project_id):
 @allow_cors
 @token_required
 def asignar_usuario_proyecto(user):
+    """
+    Endpoint para asignar un usuario a un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para asignar un usuario al proyecto.
+        schema:
+          type: object
+          properties:
+            proyecto_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            usuario:
+              type: object
+              properties:
+                _id:
+                  type: string
+                  example: "64b8f3e2c9d1a2b3c4d5e6f8"
+                nombre:
+                  type: string
+                  example: "Juan"
+                role:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      example: "lider"
+                    label:
+                      type: string
+                      example: "Líder"
+    responses:
+      200:
+        description: Usuario asignado al proyecto con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Usuario asignado al proyecto con éxito"
+      400:
+        description: El usuario ya es miembro del proyecto.
+    """
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     usuario = data["usuario"]
@@ -415,6 +720,37 @@ def asignar_usuario_proyecto(user):
 @allow_cors
 @token_required
 def eliminar_usuario_proyecto(user):
+    """
+    Endpoint para eliminar un usuario de un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para eliminar un usuario del proyecto.
+        schema:
+          type: object
+          properties:
+            proyecto_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            usuario_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f8"
+    responses:
+      200:
+        description: Usuario eliminado del proyecto con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Usuario eliminado del proyecto con éxito"
+      400:
+        description: El usuario no es miembro del proyecto.
+    """
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     usuario_id = data["usuario_id"]
@@ -444,6 +780,41 @@ def eliminar_usuario_proyecto(user):
 @allow_cors
 @token_required
 def asignar_regla_distribucion(user):
+    """
+    Endpoint para asignar una regla de distribución a un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para asignar la regla de distribución.
+        schema:
+          type: object
+          properties:
+            proyecto_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            regla_distribucion:
+              type: object
+              additionalProperties:
+                type: number
+              example:
+                lider: 50
+                miembro: 50
+    responses:
+      200:
+        description: Regla de distribución asignada con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Regla de distribución establecida con éxito"
+      400:
+        description: El proyecto ya cuenta con una regla de distribución.
+    """
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     regla_distribucion = data["regla_distribucion"]
@@ -468,6 +839,43 @@ def asignar_regla_distribucion(user):
 @app.route("/crear_solicitud_regla_fija", methods=["POST"])
 @token_required
 def crear_solicitud_regla_fija(user):
+    """
+    Endpoint para crear una solicitud de regla fija.
+    ---
+    tags:
+      - Reglas fijas
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para crear la solicitud de regla fija.
+        schema:
+          type: object
+          properties:
+            name:
+              type: string
+              example: "Regla Fija 1"
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  nombre_regla:
+                    type: string
+                    example: "Regla 1"
+                  monto:
+                    type: number
+                    example: 1000
+    responses:
+      200:
+        description: Solicitud de regla fija creada con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Solicitud de regla creada con éxito"
+    """
     data = request.get_json()
     solicitud_regla = {}
     items = data["items"]
@@ -488,6 +896,31 @@ def crear_solicitud_regla_fija(user):
 @app.route("/eliminar_solicitud_regla_fija/<string:id>", methods=["POST"])
 @allow_cors
 def eliminar_solicitud_regla_fija(id):
+    """
+    Endpoint para eliminar una solicitud de regla fija.
+    ---
+    tags:
+      - Reglas fijas
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID de la solicitud de regla fija a eliminar.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+    responses:
+      200:
+        description: Solicitud de regla fija eliminada con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Solicitud de regla eliminada con éxito"
+      400:
+        description: No se pudo eliminar la solicitud de regla fija.
+    """
     query = {"_id": ObjectId(id)}
     result = db_solicitudes.delete_one(query)
     if result.deleted_count == 1:
@@ -499,6 +932,41 @@ def eliminar_solicitud_regla_fija(id):
 @app.route("/completar_solicitud_regla_fija/<string:id>", methods=["POST"])
 @allow_cors
 def completar_solicitud_regla_fija(id):
+    """
+    Endpoint para completar una solicitud de regla fija.
+    ---
+    tags:
+      - Reglas fijas
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID de la solicitud de regla fija a completar.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: body
+        name: body
+        required: true
+        description: Resolución de la solicitud.
+        schema:
+          type: object
+          properties:
+            resolution:
+              type: string
+              example: "completed"
+    responses:
+      200:
+        description: Solicitud de regla fija completada con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Solicitud de regla eliminada con éxito"
+      400:
+        description: No se pudo completar la solicitud de regla fija.
+    """
     data = request.get_json()
     resolution = data["resolution"]
     query = {"_id": ObjectId(id)}
@@ -513,6 +981,35 @@ def completar_solicitud_regla_fija(id):
 @allow_cors
 @token_required
 def asignar_balance(user):
+    """
+    Endpoint para asignar balance a un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para asignar balance al proyecto.
+        schema:
+          type: object
+          properties:
+            project_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            balance:
+              type: string
+              example: "1000.00"
+    responses:
+      200:
+        description: Balance asignado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Balance asignado con éxito"
+    """
     data = request.get_json()
     proyecto_id = data["project_id"]
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
@@ -542,6 +1039,31 @@ def asignar_balance(user):
 @app.route("/roles", methods=["GET"])
 @allow_cors
 def roles():
+    """
+    Endpoint para obtener la lista de roles.
+    ---
+    tags:
+      - Roles
+    responses:
+      200:
+        description: Lista de roles obtenida con éxito.
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              _id:
+                type: string
+                example: "64b8f3e2c9d1a2b3c4d5e6f7"
+              nombre:
+                type: string
+                example: "Administrador"
+              permisos:
+                type: array
+                items:
+                  type: string
+                example: ["crear_usuario", "editar_usuario"]
+    """
     roles = db_roles.find({})
     list_cursor = list(roles)
     list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
@@ -554,6 +1076,57 @@ def roles():
 @app.route("/mostrar_usuarios", methods=["GET"])
 @allow_cors
 def mostrar_usuarios():
+    """
+    Endpoint para obtener la lista de usuarios.
+    ---
+    tags:
+      - Usuarios
+    parameters:
+      - in: query
+        name: page
+        required: false
+        description: Número de página para la paginación.
+        schema:
+          type: integer
+          example: 1
+      - in: query
+        name: limit
+        required: false
+        description: Límite de usuarios por página.
+        schema:
+          type: integer
+          example: 10
+      - in: query
+        name: text
+        required: false
+        description: Texto para filtrar usuarios por nombre o email.
+        schema:
+          type: string
+          example: "Juan"
+    responses:
+      200:
+        description: Lista de usuarios obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    example: "64b8f3e2c9d1a2b3c4d5e6f7"
+                  nombre:
+                    type: string
+                    example: "Juan"
+                  email:
+                    type: string
+                    example: "juan@example.com"
+            count:
+              type: integer
+              example: 100
+    """
     params = request.args
     skip = int(params.get("page")) if params.get("page") else 0
     limit = params.get("limit") if params.get("limit") else 10
@@ -581,6 +1154,53 @@ def mostrar_usuarios():
 @allow_cors
 @token_required
 def mostrar_proyectos(user):
+    """
+    Endpoint para obtener la lista de proyectos.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: query
+        name: page
+        required: false
+        description: Número de página para la paginación.
+        schema:
+          type: integer
+          example: 1
+      - in: query
+        name: limit
+        required: false
+        description: Límite de proyectos por página.
+        schema:
+          type: integer
+          example: 10
+    responses:
+      200:
+        description: Lista de proyectos obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    example: "64b8f3e2c9d1a2b3c4d5e6f7"
+                  nombre:
+                    type: string
+                    example: "Proyecto A"
+                  descripcion:
+                    type: string
+                    example: "Descripción del proyecto A"
+                  balance:
+                    type: string
+                    example: "1000.00"
+            count:
+              type: integer
+              example: 50
+    """
     # Obtener el número de página actual
     params = request.args
     skip = int(params.get("page")) if params.get("page") else 0
@@ -620,6 +1240,57 @@ def mostrar_proyectos(user):
 @app.route("/proyecto/<string:id>/acciones", methods=["GET"])
 @allow_cors
 def acciones_proyecto(id):
+    """
+    Endpoint para obtener las acciones de un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID del proyecto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: query
+        name: page
+        required: false
+        description: Número de página para la paginación.
+        schema:
+          type: integer
+          example: 1
+      - in: query
+        name: limit
+        required: false
+        description: Límite de acciones por página.
+        schema:
+          type: integer
+          example: 10
+    responses:
+      200:
+        description: Lista de acciones obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: "Fondeo"
+                  amount:
+                    type: number
+                    example: 1000
+                  total_amount:
+                    type: number
+                    example: 5000
+            count:
+              type: integer
+              example: 5
+    """
     id = ObjectId(id)
 
     params = request.args
@@ -640,6 +1311,57 @@ def acciones_proyecto(id):
 @app.route("/proyecto/<string:id>", methods=["GET"])
 @allow_cors
 def proyecto(id):
+    """
+    Endpoint para obtener las acciones de un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID del proyecto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: query
+        name: page
+        required: false
+        description: Número de página para la paginación.
+        schema:
+          type: integer
+          example: 1
+      - in: query
+        name: limit
+        required: false
+        description: Límite de acciones por página.
+        schema:
+          type: integer
+          example: 10
+    responses:
+      200:
+        description: Lista de acciones obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: "Fondeo"
+                  amount:
+                    type: number
+                    example: 1000
+                  total_amount:
+                    type: number
+                    example: 5000
+            count:
+              type: integer
+              example: 5
+    """
     # Convertir el ID a ObjectId
     id = ObjectId(id)
 
@@ -668,6 +1390,57 @@ def proyecto(id):
 @app.route("/proyecto/<string:id>/documentos", methods=["GET"])
 @allow_cors
 def mostrar_documentos_proyecto(id):
+    """
+    Endpoint para obtener los documentos de un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID del proyecto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: query
+        name: page
+        required: false
+        description: Número de página para la paginación.
+        schema:
+          type: integer
+          example: 1
+      - in: query
+        name: limit
+        required: false
+        description: Límite de documentos por página.
+        schema:
+          type: integer
+          example: 10
+    responses:
+      200:
+        description: Lista de documentos obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    example: "64b8f3e2c9d1a2b3c4d5e6f7"
+                  descripcion:
+                    type: string
+                    example: "Presupuesto inicial"
+                  monto:
+                    type: string
+                    example: "1000.00"
+            count:
+              type: integer
+              example: 5
+    """
     id = ObjectId(id)
 
     params = request.args
@@ -689,6 +1462,53 @@ def mostrar_documentos_proyecto(id):
 @allow_cors
 @token_required
 def crear_presupuesto(user):
+    """
+    Endpoint para crear un presupuesto en un proyecto.
+    ---
+    tags:
+      - Presupuestos
+    parameters:
+      - in: formData
+        name: proyecto_id
+        required: true
+        description: ID del proyecto al que pertenece el presupuesto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: formData
+        name: descripcion
+        required: true
+        description: Descripción del presupuesto.
+        schema:
+          type: string
+          example: "Presupuesto inicial"
+      - in: formData
+        name: monto
+        required: true
+        description: Monto del presupuesto.
+        schema:
+          type: string
+          example: "1000.00"
+      - in: formData
+        name: files
+        required: false
+        description: Archivos relacionados con el presupuesto.
+        schema:
+          type: array
+          items:
+            type: file
+    responses:
+      201:
+        description: Presupuesto creado con éxito.
+        schema:
+          type: object
+          properties:
+            mensaje:
+              type: string
+              example: "Archivos subidos exitosamente"
+      400:
+        description: Error en los datos enviados.
+    """
     # Get project ID and other details from request
     project_id = request.form.get("proyecto_id")
     descripcion = request.form.get("descripcion")
@@ -782,6 +1602,61 @@ def crear_presupuesto(user):
 @allow_cors
 @token_required
 def cerrar_presupuesto(user):
+    """
+    Endpoint para cerrar un presupuesto en un proyecto.
+    ---
+    tags:
+      - Presupuestos
+    parameters:
+      - in: formData
+        name: proyecto_id
+        required: true
+        description: ID del proyecto al que pertenece el presupuesto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: formData
+        name: doc_id
+        required: true
+        description: ID del documento del presupuesto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f8"
+      - in: formData
+        name: monto
+        required: true
+        description: Monto aprobado del presupuesto.
+        schema:
+          type: string
+          example: "500.00"
+      - in: formData
+        name: description
+        required: true
+        description: Descripción del cierre del presupuesto.
+        schema:
+          type: string
+          example: "Cierre del presupuesto inicial"
+      - in: formData
+        name: files
+        required: false
+        description: Archivos relacionados con el cierre del presupuesto.
+        schema:
+          type: array
+          items:
+            type: file
+    responses:
+      201:
+        description: Presupuesto cerrado con éxito.
+        schema:
+          type: object
+          properties:
+            mensaje:
+              type: string
+              example: "proyecto ajustado exitosamente"
+      400:
+        description: Error en los datos enviados.
+    """
+
     id = request.form.get("proyecto_id")
     doc_id = request.form.get("doc_id")
     data_balance = request.form.get("monto")
@@ -853,6 +1728,41 @@ def cerrar_presupuesto(user):
 @allow_cors
 @token_required
 def eliminar_presupuesto(user):
+    """
+    Endpoint para eliminar un presupuesto de un proyecto.
+    ---
+    tags:
+      - Presupuestos
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para eliminar el presupuesto.
+        schema:
+          type: object
+          properties:
+            budget_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f8"
+            project_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+    responses:
+      200:
+        description: Presupuesto eliminado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Solicitud de regla eliminada con éxito"
+      401:
+        description: El presupuesto está finalizado y no se puede eliminar.
+      404:
+        description: Presupuesto no encontrado.
+      400:
+        description: No se pudo eliminar el presupuesto.
+    """
     data = request.get_json()
     presupuesto_id = data["budget_id"]
     id = data["project_id"]
@@ -881,6 +1791,41 @@ def eliminar_presupuesto(user):
 @allow_cors
 @token_required
 def eliminar_proyecto(user):
+    """
+    Endpoint para eliminar un presupuesto de un proyecto.
+    ---
+    tags:
+      - Presupuestos
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para eliminar el presupuesto.
+        schema:
+          type: object
+          properties:
+            budget_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f8"
+            project_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+    responses:
+      200:
+        description: Presupuesto eliminado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Solicitud de regla eliminada con éxito"
+      401:
+        description: El presupuesto está finalizado y no se puede eliminar.
+      404:
+        description: Presupuesto no encontrado.
+      400:
+        description: No se pudo eliminar el presupuesto.
+    """
     data = request.get_json()
     id = data["proyecto_id"]
     documento = db_proyectos.find_one({"_id": ObjectId(id)})
@@ -898,6 +1843,36 @@ def eliminar_proyecto(user):
 @allow_cors
 @token_required
 def finalizar_proyecto(user):
+    """
+    Endpoint para finalizar un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para finalizar el proyecto.
+        schema:
+          type: object
+          properties:
+            proyecto_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+    responses:
+      200:
+        description: Proyecto finalizado con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Proyecto finalizado con éxito"
+      404:
+        description: Proyecto no encontrado.
+      400:
+        description: Error en los datos enviados.
+    """
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
@@ -950,6 +1925,57 @@ def finalizar_proyecto(user):
 @app.route("/proyecto/<string:id>/logs", methods=["GET"])
 @allow_cors
 def obtener_logs(id):
+    """
+    Endpoint para obtener los logs de un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID del proyecto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: query
+        name: page
+        required: false
+        description: Número de página para la paginación.
+        schema:
+          type: integer
+          example: 1
+      - in: query
+        name: limit
+        required: false
+        description: Límite de logs por página.
+        schema:
+          type: integer
+          example: 10
+    responses:
+      200:
+        description: Lista de logs obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  id_proyecto:
+                    type: string
+                    example: "64b8f3e2c9d1a2b3c4d5e6f7"
+                  mensaje:
+                    type: string
+                    example: "Usuario X realizó una acción"
+                  fecha_creacion:
+                    type: string
+                    example: "2025-04-22T12:00:00Z"
+            count:
+              type: integer
+              example: 5
+    """
     id = ObjectId(id)
 
     params = request.args
@@ -972,6 +1998,50 @@ def obtener_logs(id):
 @allow_cors
 @token_required
 def mostrar_solicitudes(user):
+    """
+    Endpoint para obtener la lista de solicitudes.
+    ---
+    tags:
+      - Solicitudes
+    parameters:
+      - in: query
+        name: page
+        required: false
+        description: Número de página para la paginación.
+        schema:
+          type: integer
+          example: 1
+      - in: query
+        name: limit
+        required: false
+        description: Límite de solicitudes por página.
+        schema:
+          type: integer
+          example: 10
+    responses:
+      200:
+        description: Lista de solicitudes obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    example: "64b8f3e2c9d1a2b3c4d5e6f7"
+                  nombre:
+                    type: string
+                    example: "Solicitud 1"
+                  status:
+                    type: string
+                    example: "new"
+            count:
+              type: integer
+              example: 50
+    """
     # Obtener el número de página actual
     params = request.args
     skip = int(params.get("page")) if params.get("page") else 0
@@ -991,6 +2061,32 @@ def mostrar_solicitudes(user):
 @allow_cors
 @token_required
 def mostrar_reglas_fijas(user):
+    """
+    Endpoint para obtener la lista de reglas fijas completadas.
+    ---
+    tags:
+      - Reglas fijas
+    responses:
+      200:
+        description: Lista de reglas fijas obtenida con éxito.
+        schema:
+          type: object
+          properties:
+            request_list:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    example: "64b8f3e2c9d1a2b3c4d5e6f7"
+                  nombre:
+                    type: string
+                    example: "Regla Fija 1"
+                  status:
+                    type: string
+                    example: "completed"
+    """
     list_request = db_solicitudes.find({"status": "completed"})
     list_cursor = list(list_request)
     list_dump = json_util.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
@@ -1005,6 +2101,37 @@ def mostrar_reglas_fijas(user):
 @app.route("/proyecto/<string:id>/movimientos/descargar", methods=["GET"])
 @allow_cors
 def descargar_movimientos(id):
+    """
+    Endpoint para descargar los movimientos de un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID del proyecto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+      - in: query
+        name: formato
+        required: false
+        description: Formato de descarga (csv o json).
+        schema:
+          type: string
+          example: "csv"
+    responses:
+      200:
+        description: Archivo descargado con éxito.
+        content:
+          application/json:
+            schema:
+              type: string
+              example: "Archivo descargado con éxito"
+      400:
+        description: Formato no válido.
+    """
     id_proyecto = ObjectId(id)
 
     # 1. Recuperar los movimientos del proyecto desde la base de datos
@@ -1024,6 +2151,59 @@ def descargar_movimientos(id):
 @app.route("/proyecto/<string:id>/fin", methods=["GET"])
 @allow_cors
 def mostrar_finalizacion(id):
+    """
+    Endpoint para obtener los datos finales de un proyecto.
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID del proyecto.
+        schema:
+          type: string
+          example: "64b8f3e2c9d1a2b3c4d5e6f7"
+    responses:
+      200:
+        description: Datos finales del proyecto obtenidos con éxito.
+        schema:
+          type: object
+          properties:
+            logs:
+              type: array
+              items:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Usuario X realizó una acción"
+                  fecha_creacion:
+                    type: string
+                    example: "2025-04-22T12:00:00Z"
+            documentos:
+              type: array
+              items:
+                type: object
+                properties:
+                  descripcion:
+                    type: string
+                    example: "Presupuesto inicial"
+                  monto:
+                    type: string
+                    example: "1000.00"
+            movimientos:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: "Fondeo"
+                  amount:
+                    type: number
+                    example: 1000
+    """
     id = ObjectId(id)
     movs = db_acciones.find({"project_id": id})
     docs = db_documentos.find({"project_id": id})
@@ -1048,6 +2228,39 @@ def mostrar_finalizacion(id):
 @allow_cors
 @token_required
 def asignar_regla_fija(user):
+    """
+    Endpoint para asignar una regla fija a un proyecto.
+    ---
+    tags:
+      - Reglas fijas
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para asignar la regla fija.
+        schema:
+          type: object
+          properties:
+            proyecto_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f7"
+            regla_id:
+              type: string
+              example: "64b8f3e2c9d1a2b3c4d5e6f8"
+    responses:
+      200:
+        description: Regla fija asignada con éxito.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "La regla se asignó correctamente"
+      404:
+        description: Proyecto o regla fija no encontrada.
+      400:
+        description: Error en los datos enviados.
+    """
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     regla_id = data["regla_id"]
