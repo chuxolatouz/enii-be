@@ -3,6 +3,8 @@ from jose import jwt
 from bson import ObjectId, json_util
 from io import StringIO, BytesIO
 from flask import send_file
+from util.generar_acta_inicio import generar_acta_inicio_pdf
+from util.backblaze import BUCKET_ID, upload_file, auth_b2_account
 import csv  # Para CSV
 import json
 
@@ -53,7 +55,7 @@ def map_to_doc(document):
     return document
 
 
-def actualizar_pasos(status, paso):
+def actualizar_pasos(status, paso, proyecto=None):
     "Esta funcion actualiza el status de un proyecto dependiendo de la posicion en la que se encuentre"
     "Recibe el objecto status y el paso a actualizar"
     "El objeto status se representa como {'actual': 3, 'completado': [1, 2]}"
@@ -67,23 +69,38 @@ def actualizar_pasos(status, paso):
     "Status 5: Agregar Regla fija"
     "Status 6: Configurado"
     "-----------------------"
-    new_status = status
-    if paso > status["actual"]:
+    """
+    Esta funcion actualiza el status de un proyecto dependiendo de la posicion en la que se encuentre.
+    Si se alcanza el paso 6 (proyecto configurado) y no tiene acta de inicio, se genera y guarda.
+    """
+    new_status = status.copy()
+
+    if paso > new_status["actual"]:
         new_status["actual"] = paso
-    if paso == status["actual"]:
+    if paso == new_status["actual"]:
         new_status["actual"] = paso + 1
 
-    if paso not in status["completado"]:
+    if paso not in new_status["completado"]:
         new_status["completado"].append(paso)
 
-    return new_status
+    acta_inicio = None
+
+    if new_status["actual"] >= 6 and proyecto and not proyecto.get("acta_inicio"):
+        try:
+            pdf_bytes = generar_acta_inicio_pdf(proyecto)
+            api = auth_b2_account()
+            filename = f"actas/acta_inicio_{str(proyecto['_id'])}.pdf"
+            upload_result = upload_file(api, BUCKET_ID, BytesIO(pdf_bytes), filename)
+            acta_inicio = {
+                "fecha": datetime.utcnow(),
+                "documento_url": upload_result.download_url,
+            }
+        except Exception as e:
+            print(f"[ERROR] Falló la generación del acta de inicio: {e}")
+
+    return new_status, acta_inicio
 
 
-def auth_account(b2_api):
-    auth = b2_api.authorize_account(
-        "production", "0054addcef284d30000000002", "K005xSlLQhiwP7QZsQOXxe7k2HH+WHk"
-    )
-    return auth
 
 def generar_csv(movimientos):
     si = StringIO()  # Usar StringIO en lugar de BytesIO para texto
@@ -113,7 +130,7 @@ def generar_csv(movimientos):
         BytesIO(output.encode()),  # Convertir a BytesIO
         mimetype="text/csv",
         as_attachment=True,
-        download_name=f"movimientos_proyecto.csv"  # Nombre del archivo
+        download_name="movimientos_proyecto.csv"  # Nombre del archivo
     )
 
 def generar_json(movimientos):

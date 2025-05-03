@@ -4,9 +4,8 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from datetime import datetime
 from bson import ObjectId, json_util
+from util.backblaze import BUCKET_ID, auth_b2_account, upload_file
 
-
-from b2sdk.v2 import B2Api, InMemoryAccountInfo
 from util.decorators import validar_datos, allow_cors, token_required
 from util.utils import (
     string_to_int,
@@ -14,7 +13,6 @@ from util.utils import (
     generar_token,
     map_to_doc,
     actualizar_pasos,
-    auth_account,
     generar_csv,
     generar_json
 )
@@ -41,9 +39,6 @@ app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
 CORS(app, supports_credentials=True)
-
-info = InMemoryAccountInfo()
-b2_api = B2Api(account_info=info)
 
 # config(
 #     cloud_name="dnfl6l0xp",
@@ -608,7 +603,6 @@ def actualizar_proyecto(user, project_id):
       404:
         description: Proyecto no encontrado.
     """
-    current_user = user["sub"]
     data = request.get_json()
 
     # Check if project exists
@@ -1552,20 +1546,14 @@ def crear_presupuesto(user):
     # Upload files to Cloudinary within presupuesto folder
     for archivo in archivos:
         # Generate unique public ID (optional)
-        public_id = f"budgets/{folder_path}/{archivo.filename}"
-
-        # Upload file to Cloudinary
-        auth_account(b2_api)
-        bucket = b2_api.get_bucket_by_id("d4ea8d3dcc4e0ff288e40d13")
-
+        public_id = f"budgets/{project_id}/{presupuesto_id}/{archivo.filename}"
         file_buffer = BytesIO(archivo.read())
-        file_data = file_buffer.read()
-        upload_result = bucket.upload_bytes(file_data, file_name=public_id)
+        upload_result = upload_file(file_buffer, public_id)
 
         if upload_result is not None:
-            uploaded_files.append(upload_result.id_)
+            uploaded_files.append(upload_result["download_url"])
             presupuesto["archivos"].append(
-                {"nombre": archivo.filename, "public_id": upload_result.id_}
+                {"nombre": archivo.filename, "public_id": upload_result["fileId"], "download_url": upload_result["download_url"]}
             )
         else:
             error_messages.append(
@@ -1909,8 +1897,10 @@ def finalizar_proyecto(user):
             print(
                 f"Warning: No rule found for role '{member_role_value}'. Budget not assigned."
             )
-    new_status = actualizar_pasos(proyecto["status"], 6)
+    new_status, acta_inicio = actualizar_pasos(proyecto["status"], 6, proyecto)
     new_status["finished"] = True
+    if acta_inicio:
+      new_status["acta_inicio"] = acta_inicio
     db_proyectos.update_one(
         {"_id": ObjectId(proyecto_id)},
         {"$set": {"status": new_status, "distribucion_recursos": budgeted_members}},

@@ -1,5 +1,9 @@
 # Enii backend
 
+## pre-requirements
+
+sudo apt install wkhtmltopdf
+
 ## install
 
 pip install requirements.txt
