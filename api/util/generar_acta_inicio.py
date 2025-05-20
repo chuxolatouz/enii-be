@@ -28,6 +28,15 @@ def generar_acta_inicio_pdf(proyecto):
             <p><span class="bold">Balance Inicial:</span> ${{ balance }}</p>
         </div>
         <div class="seccion">
+            <h2>Objetivo General</h2>
+            <p>{{ objetivo_general }}</p>
+
+            <h2>Objetivos Específicos</h2>
+            <ul>
+            {% for obj in objetivos_especificos %}
+                <li>{{ obj }}</li>
+            {% endfor %}
+            </ul>
             <p class="bold">Miembros del Proyecto:</p>
             <ul>
                 {% for m in miembros %}
@@ -50,6 +59,8 @@ def generar_acta_inicio_pdf(proyecto):
         nombre=proyecto.get("nombre", "Sin nombre"),
         descripcion=proyecto.get("descripcion", "Sin descripción"),
         fecha=proyecto.get("fecha_inicio", "Sin fecha"),
+        objetivo_general=proyecto.get("objetivo_general", ""),
+        objetivos_especificos=proyecto.get("objetivos_especificos", []),
         balance=proyecto.get("balance_inicial", "0.00"),
         miembros=miembros
     )

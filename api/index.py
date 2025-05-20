@@ -4,9 +4,10 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from datetime import datetime
 from bson import ObjectId, json_util
-from util.backblaze import BUCKET_ID, auth_b2_account, upload_file
+from util.backblaze import upload_file
 
 from util.decorators import validar_datos, allow_cors, token_required
+from util.generar_acta_finalizacion import generar_acta_finalizacion_pdf
 from util.utils import (
     string_to_int,
     int_to_string,
@@ -38,7 +39,8 @@ app.config["MONGO_URI"] = (
 app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "http://localhost:3001"}})
+
 
 # config(
 #     cloud_name="dnfl6l0xp",
@@ -1230,6 +1232,49 @@ def mostrar_proyectos(user):
     list_json = jsonify(request_list=list_json, count=quantity)
     return list_json
 
+@app.route('/proyecto/<string:proyecto_id>/objetivos', methods=['GET'])
+@token_required
+def obtener_objetivos_especificos(_, proyecto_id):
+    
+    """
+    Obtener los objetivos específicos de un proyecto.
+
+    ---
+    tags:
+      - Proyectos
+    parameters:
+      - name: proyecto_id
+        in: path
+        type: string
+        required: true
+        description: ID del proyecto
+
+    responses:
+      200:
+        description: Lista de objetivos específicos
+        schema:
+          type: object
+          properties:
+            objetivos_especificos:
+              type: array
+              items:
+                type: string
+      404:
+        description: Proyecto no encontrado
+      401:
+        description: Token inválido o no autorizado
+    """
+    proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)}, {
+        "objetivos_especificos": 1
+    })
+
+    if not proyecto:
+        return jsonify({"message": "Proyecto no encontrado"}), 404
+
+    return jsonify({
+        "objetivos_especificos": proyecto.get("objetivos_especificos", [])
+    })
+
 
 @app.route("/proyecto/<string:id>/acciones", methods=["GET"])
 @allow_cors
@@ -1491,6 +1536,13 @@ def crear_presupuesto(user):
           type: array
           items:
             type: file
+      - in: formData
+        name: objetivo_especifico
+        required: true
+        description: En el caso de que el presupuesto sea para un objetivo específico.
+        schema:
+          type: string
+          example: "Compra de materiales"
     responses:
       201:
         description: Presupuesto creado con éxito.
@@ -1507,16 +1559,18 @@ def crear_presupuesto(user):
     project_id = request.form.get("proyecto_id")
     descripcion = request.form.get("descripcion")
     monto = request.form.get("monto")
+    objetivo_especifico = request.form.get("objetivo_especifico")
 
     # Validate required fields
     if not project_id or not descripcion or not monto:
         return jsonify({"error": "Missing required fields"}), 400
+        
 
     # Generate unique presupuesto ID
     presupuesto_id = str(ObjectId())
 
     # Create folders with project ID and presupuesto ID in Cloudinary
-    folder_path = f"{project_id}/{presupuesto_id}"
+    # folder_path = f"budgets/{project_id}/{presupuesto_id}"
     # try:
     #     print('Folder Path')
     #     print(folder_path)
@@ -1533,6 +1587,7 @@ def crear_presupuesto(user):
         # Replace with your string to int conversion function
         "monto": string_to_int(monto),
         "status": "new",
+        "objetivo_especifico": objetivo_especifico,
         "archivos": [],
     }
 
@@ -1650,6 +1705,10 @@ def cerrar_presupuesto(user):
     data_balance = request.form.get("monto")
     data_descripcion = request.form.get("description")
     carpeta_proyecto = os.path.join("files", id)
+    referencia=request.form.get("referencia")
+    monto_transferencia=request.form.get("monto_transferencia")
+    banco=request.form.get("banco")
+    cuenta_contable=request.form.get("cuenta_contable")
 
     # Crear la carpeta del proyecto si no existe
     if not os.path.exists(carpeta_proyecto):
@@ -1659,6 +1718,10 @@ def cerrar_presupuesto(user):
     data_balance = string_to_int(data_balance)
     proyecto_balance = int(proyecto["balance"])
     balance = proyecto_balance - data_balance
+
+    if data_balance > proyecto_balance:
+      return jsonify({"error": "El monto aprobado excede el saldo disponible del proyecto."}), 400
+    
     db_proyectos.update_one({"_id": ObjectId(id)}, {"$set": {"balance": balance}})
 
     # Agregas la accion a las actividades
@@ -1668,6 +1731,10 @@ def cerrar_presupuesto(user):
     data_acciones["type"] = f"Retiro {data_descripcion}"
     data_acciones["amount"] = data_balance * -1
     data_acciones["total_amount"] = balance
+    data_acciones["referencia"] = referencia
+    data_acciones["monto_transferencia"] = monto_transferencia
+    data_acciones["banco"] = banco
+    data_acciones["cuenta_contable"] = cuenta_contable
     db_acciones.insert_one(data_acciones)
 
     # Cierras el presupuesto
@@ -1702,6 +1769,11 @@ def cerrar_presupuesto(user):
                 "status": "finished",
                 "monto_aprobado": data_balance,
                 "archivos_aprobado": archivos_guardados,
+                "description": data_descripcion,
+                "referencia": referencia,
+                "monto_transferencia": monto_transferencia,
+                "banco": "banco",
+                "cuenta_contable": cuenta_contable
             }
         },
     )
@@ -1862,54 +1934,77 @@ def finalizar_proyecto(user):
         description: Error en los datos enviados.
     """
     data = request.get_json()
-    proyecto_id = data["proyecto_id"]
+    proyecto_id = data.get("proyecto_id")
+
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
-    if proyecto is None:
+    if not proyecto:
         return jsonify({"message": "Proyecto no encontrado"}), 404
-    balance = proyecto["balance"]
-    reglas = proyecto["reglas"]
-    if len(dir(reglas)) == 0:
-        return jsonify({"message": "No se han establecido reglas de distribución"}), 404
 
-    if sum(reglas.values()) != 100:
-        return jsonify(
-            {"message": "La suma de los porcentajes de reglas debe ser igual a 100"}
-        ), 401
-    miembros = proyecto.get("miembros", [])
-    if len(miembros) == 0:
-        return jsonify({"message": "No hay miembros asignados al proyecto"}), 404
-        # 1. Calculate the percentage distribution for each role:
-    distribucion = {
-        role: (percentage / 100) * balance for role, percentage in reglas.items()
-    }
+    # 1. Obtener movimientos monetarios
+    movimientos = list(db_acciones.find({"proyecto_id": ObjectId(proyecto_id)}))
+    movimientos_simple = [
+        {"type": m.get("type"), "amount": m.get("amount", 0), "user": m.get("user", "N/A")}
+        for m in movimientos
+    ]
 
-    # 2. Create an empty list to store the budget-assigned members:
-    budgeted_members = []
+    # 2. Obtener logs del sistema
+    logs = list(db_logs.find({"proyecto_id": ObjectId(proyecto_id)}))
+    logs_simple = [
+        {"fecha": str(l.get("fecha_creacion")), "mensaje": l.get("mensaje")}
+        for l in logs
+    ]
 
-    # 3. Iterate through each member and assign their budget:
-    for member in miembros:  # Using "miembros" instead of "members"
-        member_role = member.get("role")
-        member_role_value = member_role.get("value")
-        if member_role_value in distribucion:
-            member_budget = distribucion[member_role_value]
-            budgeted_members.append({"role": member_role, "budget": member_budget})
-        else:
-            print(
-                f"Warning: No rule found for role '{member_role_value}'. Budget not assigned."
-            )
-    new_status, acta_inicio = actualizar_pasos(proyecto["status"], 6, proyecto)
-    new_status["finished"] = True
-    if acta_inicio:
-      new_status["acta_inicio"] = acta_inicio
+    # 3. Obtener presupuestos relacionados
+    presupuestos = list(db_documentos.find({"proyecto_id": ObjectId(proyecto_id)}))
+    presupuestos_simple = [
+        {"descripcion": b.get("descripcion", ""), "monto_aprobado": b.get("monto_aprobado", 0)}
+        for b in presupuestos
+    ]
+
+    # 4. Actualizar proyecto como finalizado
     db_proyectos.update_one(
         {"_id": ObjectId(proyecto_id)},
-        {"$set": {"status": new_status, "distribucion_recursos": budgeted_members}},
+        {
+            "$set": {
+                "status.finished": True,
+                "fecha_fin": datetime.utcnow()
+            }
+        }
     )
-    proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
-    message_log = f'{user["nombre"]} finalizó el proyecto'
-    agregar_log(proyecto_id, message_log)
 
-    return jsonify({"message": "Proyecto finalizado con éxito"}), 200
+    # 5. Volver a cargar proyecto actualizado (por si agregaste fecha_fin)
+    proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
+
+    # 6. Generar el PDF del acta
+    try:
+        pdf_bytes = generar_acta_finalizacion_pdf(
+            proyecto,
+            movements=movimientos_simple,
+            logs=logs_simple,
+            budgets=presupuestos_simple
+        )
+
+        # 7. Subir PDF a Backblaze
+        file_name = f"actas/acta_finalizacion_{str(proyecto['_id'])}.pdf"
+        upload_result = upload_file(BytesIO(pdf_bytes), file_name)
+
+        # 8. Guardar URL del acta en el proyecto
+        db_proyectos.update_one(
+            {"_id": ObjectId(proyecto["_id"])},
+            {
+                "$set": {
+                    "acta_finalizacion": {
+                        "fecha": datetime.utcnow(),
+                        "documento_url": upload_result["download_url"],
+                        "file_id": upload_result["fileId"]
+                    }
+                }
+            }
+        )
+    except Exception as e:
+        print(f"❌ Error generando o subiendo acta finalización: {e}")
+
+    return jsonify({"message": "Proyecto finalizado exitosamente."}), 200
 
 
 @app.route("/proyecto/<string:id>/logs", methods=["GET"])
@@ -2303,6 +2398,99 @@ def asignar_regla_fija(user):
     # Dar respuesta que todo esta ok
     return jsonify({"message": "La regla se asigno correctamente"}), 200
 
+@app.route('/reporte/proyecto/<string:proyecto_id>', methods=['GET'])
+@token_required
+def generar_reporte_proyecto(data, proyecto_id):
+    """
+    Generar un reporte resumen del proyecto.
+
+    ---
+    tags:
+      - Reportes
+    parameters:
+      - name: proyecto_id
+        in: path
+        type: string
+        required: true
+        description: ID del proyecto para generar el reporte.
+    responses:
+      200:
+        description: Reporte generado exitosamente
+        schema:
+          type: object
+          properties:
+            saldo_inicial:
+              type: number
+              description: Monto inicial del proyecto.
+            saldo_restante:
+              type: number
+              description: Saldo disponible restante.
+            presupuestos_totales:
+              type: integer
+              description: Número total de presupuestos creados.
+            monto_total_presupuestado:
+              type: number
+              description: Suma de los montos de todos los presupuestos.
+            monto_total_aprobado:
+              type: number
+              description: Suma de los montos aprobados.
+            top_presupuestos:
+              type: array
+              items:
+                type: object
+                properties:
+                  descripcion:
+                    type: string
+                    description: Descripción del presupuesto.
+                  monto_aprobado:
+                    type: number
+                    description: Monto aprobado en el presupuesto.
+                  objetivo_especifico:
+                    type: string
+                    description: Objetivo específico relacionado.
+      404:
+        description: Proyecto no encontrado
+      401:
+        description: Token inválido o no autorizado
+    """
+    proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
+    if not proyecto:
+        return jsonify({"error": "Proyecto no encontrado"}), 404
+
+    presupuestos = list(db_documentos.find({"proyecto_id": ObjectId(proyecto_id)}))
+
+    saldo_inicial = proyecto.get("balance_inicial", 0)
+    saldo_restante = proyecto.get("balance", 0)
+
+    monto_total_presupuestado = sum(p.get("monto", 0) for p in presupuestos)
+    monto_total_aprobado = sum(p.get("monto_aprobado", 0) for p in presupuestos if p.get("status") == "finished")
+    presupuestos_totales = len(presupuestos)
+
+    top_presupuestos = sorted(
+        [p for p in presupuestos if p.get("status") == "finished"],
+        key=lambda x: x.get("monto_aprobado", 0),
+        reverse=True
+    )[:5]
+
+    top_presupuestos_simple = [
+        {
+            "descripcion": p.get("descripcion"),
+            "monto_aprobado": p.get("monto_aprobado"),
+            "objetivo_especifico": p.get("objetivo_especifico")
+        }
+        for p in top_presupuestos
+    ]
+
+    reporte = {
+        "saldo_inicial": saldo_inicial,
+        "saldo_restante": saldo_restante,
+        "presupuestos_totales": presupuestos_totales,
+        "monto_total_presupuestado": monto_total_presupuestado,
+        "monto_total_aprobado": monto_total_aprobado,
+        "top_presupuestos": top_presupuestos_simple
+    }
+
+    return jsonify(reporte), 200
 
 @app.route("/", methods=["GET"])
 @allow_cors
