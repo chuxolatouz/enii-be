@@ -5,6 +5,7 @@ from flask_cors import CORS
 from datetime import datetime
 from bson import ObjectId, json_util
 from util.backblaze import upload_file
+from collections import defaultdict
 
 from util.decorators import validar_datos, allow_cors, token_required
 from util.generar_acta_finalizacion import generar_acta_finalizacion_pdf
@@ -39,7 +40,7 @@ app.config["MONGO_URI"] = (
 app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
-CORS(app, supports_credentials=True, resources={r"/*": {"origins": "http://localhost:3001"}})
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 
 # config(
@@ -139,7 +140,7 @@ def registrar():
 
 @app.route("/login", methods=["POST"])
 @validar_datos({"email": str, "password": str})
-def login():   
+def login():
     """
     Endpoint para iniciar sesión en la plataforma.
     ---
@@ -413,7 +414,6 @@ def obtener_categorias():
     
     list_cursor = list(cursor)
     list_dump = json.dumps(list_cursor, default=json_util.default, ensure_ascii=False)
-    print(list_dump)
     # Remover las barras invertidas
     list_json = json.loads(list_dump.replace("\\", ""))
     return jsonify(list_json), 200
@@ -1402,7 +1402,10 @@ def proyecto(id):
               example: 5
     """
     # Convertir el ID a ObjectId
-    id = ObjectId(id)
+    try:
+        id = ObjectId(id.strip())  # <-- limpiamos espacios invisibles
+    except Exception as e:
+        return {"message": "ID de proyecto inválido"}, 400
 
     # Buscar el producto por ID en la base de datos
     proyecto = db_proyectos.find_one({"_id": id})
@@ -1422,7 +1425,6 @@ def proyecto(id):
     # Devolver el proyecto como una respuesta JSON
     if "regla_fija" in proyecto:
         proyecto["regla_fija"]["_id"] = str(proyecto["regla_fija"]["_id"])
-    print(proyecto)
     return jsonify(proyecto)
 
 
@@ -2492,6 +2494,118 @@ def generar_reporte_proyecto(data, proyecto_id):
 
     return jsonify(reporte), 200
 
+@app.route('/proyecto/<id>/reporte', methods=['GET'])
+def obtener_reporte_proyecto(id):
+    """
+    Devuelve un resumen del proyecto con evolución del saldo, egresos por tipo y totales.
+    ---
+    tags:
+      - Reportes
+    parameters:
+      - name: id
+        in: path
+        required: true
+        type: string
+        description: ID del proyecto
+    responses:
+      200:
+        description: Reporte generado con éxito.
+        schema:
+          type: object
+          properties:
+            balance_history:
+              type: array
+              items:
+                type: object
+                properties:
+                  fecha:
+                    type: string
+                    example: "2025-06-03"
+                  saldo:
+                    type: number
+                    example: 5200
+            egresos_tipo:
+              type: array
+              items:
+                type: object
+                properties:
+                  tipo:
+                    type: string
+                    example: "Transporte"
+                  monto:
+                    type: number
+                    example: 1000
+            resumen:
+              type: object
+              properties:
+                ingresos:
+                  type: number
+                  example: 45000
+                egresos:
+                  type: number
+                  example: 38000
+                represupuestos:
+                  type: number
+                  example: 3
+                miembros:
+                  type: number
+                  example: 4
+      404:
+        description: Proyecto no encontrado.
+    """
+    try:
+        project_id = ObjectId(id)
+    except Exception:
+        return jsonify({"message": "ID de proyecto inválido"}), 400
+
+    acciones = list(db_acciones.find({"project_id": project_id}).sort("created_at", 1))
+    proyecto = db_proyectos.find_one({"_id": project_id})
+    if not proyecto:
+        return jsonify({"message": "Proyecto no encontrado"}), 404
+
+    # --------------------------
+    # Evolución del saldo
+    # --------------------------
+    balance_history = [
+        {
+            "fecha": acc["created_at"].strftime("%Y-%m-%d"),
+            "saldo": acc["total_amount"] / 100
+        }
+        for acc in acciones if "created_at" in acc
+    ]
+
+    # --------------------------
+    # Egresos agrupados por tipo
+    # --------------------------
+    egresos_por_tipo = defaultdict(float)
+    for acc in acciones:
+        if acc.get("amount", 0) < 0:
+            egresos_por_tipo[acc.get("type", "Sin tipo")] += abs(acc["amount"]) / 100
+
+    egresos_tipo = [{"tipo": tipo, "monto": monto} for tipo, monto in egresos_por_tipo.items()] 
+
+    # --------------------------
+    # Resumen general
+    # --------------------------
+    resumen = {
+        "ingresos": sum(acc.get("amount", 0) for acc in acciones if acc.get("amount", 0) > 0) / 100,
+        "egresos": -sum(acc.get("amount", 0) for acc in acciones if acc.get("amount", 0) < 0) / 100,
+        "presupuestos": db_documentos.count_documents({
+            "project_id": ObjectId(project_id),
+            "status": "finished"
+        }),
+        "represupuestos": db_documentos.count_documents({
+            "project_id": ObjectId(project_id),
+            "status": "new"
+        }),
+        "miembros": len(proyecto.get("miembros", [])),
+    }
+
+    return jsonify({
+        "balanceHistory": balance_history,
+        "egresosPorTipo": egresos_tipo,
+        "resumen": resumen
+    })
 @app.route("/", methods=["GET"])
 @allow_cors
 def index():
