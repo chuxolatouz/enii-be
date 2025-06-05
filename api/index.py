@@ -118,6 +118,9 @@ def registrar():
             password:
               type: string
               example: "password123"
+            is_admin:
+              type: boolean
+              example: false
     responses:
       201:
         description: Usuario registrado con éxito.
@@ -463,6 +466,58 @@ def crear_categorias():
     categoria["id"] = str(categoria_insertada.inserted_id)
     return jsonify(categoria), 201
 
+@app.route("/cambiar_rol_usuario", methods=["POST"])
+@allow_cors
+@validar_datos({"id": str, "nuevo_rol": bool})
+@token_required
+def cambiar_rol_usuario(user):
+    """
+    Endpoint para cambiar el rol de un usuario en el sistema.
+    ---
+    tags:
+      - Usuarios
+    parameters:
+      - in: body
+        name: body
+        required: true
+        description: Datos para cambiar el rol del usuario.
+        schema:
+          type: object
+          properties:
+            id_usuario:
+              type: string
+              example: "64a12fabc123456789012345"
+            is_admin:
+              type: boolean
+              example: true
+    responses:
+      200:
+        description: Rol del usuario actualizado correctamente.
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Rol actualizado correctamente"
+      404:
+        description: Usuario no encontrado.
+      400:
+        description: Datos inválidos o faltantes.
+    """
+    data = request.get_json()
+    usuario_id = data.get("id")
+    nuevo_rol = data.get("nuevo_rol")
+
+    usuario = mongo.db.usuarios.find_one({"_id": ObjectId(usuario_id)})
+    if not usuario:
+        return jsonify({"message": "Usuario no encontrado"}), 404
+
+    mongo.db.usuarios.update_one(
+        {"_id": ObjectId(usuario_id)},
+        {"$set": {"is_admin": nuevo_rol}}
+    )
+
+    return jsonify({"message": "Rol actualizado correctamente"}), 200
 
 @app.route("/asignar_rol", methods=["PATCH"])
 @token_required
