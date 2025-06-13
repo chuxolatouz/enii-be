@@ -4,7 +4,7 @@ from bson import ObjectId, json_util
 from io import StringIO, BytesIO
 from flask import send_file
 from util.generar_acta_inicio import generar_acta_inicio_pdf
-from util.backblaze import BUCKET_ID, upload_file, auth_b2_account
+from util.backblaze import upload_file
 import csv  # Para CSV
 import json
 
@@ -88,9 +88,8 @@ def actualizar_pasos(status, paso, proyecto=None):
     if new_status["actual"] >= 6 and proyecto and not proyecto.get("acta_inicio"):
         try:
             pdf_bytes = generar_acta_inicio_pdf(proyecto)
-            api = auth_b2_account()
             filename = f"actas/acta_inicio_{str(proyecto['_id'])}.pdf"
-            upload_result = upload_file(api, BUCKET_ID, BytesIO(pdf_bytes), filename)
+            upload_result = upload_file(BytesIO(pdf_bytes), filename)
             acta_inicio = {
                 "fecha": datetime.utcnow(),
                 "documento_url": upload_result.download_url,
