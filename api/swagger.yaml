@@ -1,0 +1,603 @@
+swagger: '2.0'
+info:
+  title: Enii API
+  description: API documentation for the Enii backend
+  version: '1.0'
+schemes:
+  - http
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /registrar:
+    post:
+      summary: Registrar un nuevo usuario
+      tags:
+        - Usuarios
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              nombre:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+      responses:
+        201:
+          description: Usuario registrado con exito
+  /login:
+    post:
+      summary: Iniciar sesion
+      tags:
+        - Usuarios
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+              password:
+                type: string
+      responses:
+        200:
+          description: Inicio de sesion exitoso
+  /mostrar_categorias:
+    get:
+      summary: Obtener la lista de categorias
+      tags:
+        - Categorias
+      parameters:
+        - in: query
+          name: text
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: Lista obtenida
+  /categorias:
+    post:
+      summary: Crear una nueva categoria
+      tags:
+        - Categorias
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              nombre:
+                type: string
+      responses:
+        201:
+          description: Categoria creada
+  /crear_proyecto:
+    post:
+      summary: Crear proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              nombre:
+                type: string
+              descripcion:
+                type: string
+              fecha_inicio:
+                type: string
+              fecha_fin:
+                type: string
+      responses:
+        201:
+          description: Proyecto creado
+  /actualizar_proyecto/{project_id}:
+    put:
+      summary: Actualizar proyecto existente
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          type: string
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              nombre:
+                type: string
+              descripcion:
+                type: string
+              fecha_inicio:
+                type: string
+              fecha_fin:
+                type: string
+      responses:
+        200:
+          description: Proyecto actualizado
+  /asignar_usuario_proyecto:
+    patch:
+      summary: Asignar usuario a proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              proyecto_id:
+                type: string
+              usuario:
+                type: object
+              role:
+                type: object
+      responses:
+        200:
+          description: Usuario asignado
+  /olvido_contraseña:
+    post:
+      summary: Solicitar restablecimiento de contraseña
+      tags:
+        - Usuarios
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+      responses:
+        200:
+          description: Correo enviado
+  /editar_usuario/{id_usuario}:
+    put:
+      summary: Editar usuario existente
+      tags:
+        - Usuarios
+      parameters:
+        - in: path
+          name: id_usuario
+          required: true
+          type: string
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Usuario actualizado
+  /eliminar_usuario:
+    post:
+      summary: Eliminar usuario
+      tags:
+        - Usuarios
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              id_usuario:
+                type: string
+      responses:
+        200:
+          description: Usuario eliminado
+  /cambiar_rol_usuario:
+    post:
+      summary: Cambiar rol de usuario
+      tags:
+        - Usuarios
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              nuevo_rol:
+                type: boolean
+      responses:
+        200:
+          description: Rol actualizado
+  /crear_rol:
+    post:
+      summary: Crear rol
+      tags:
+        - Roles
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        201:
+          description: Rol creado
+  /asignar_rol:
+    patch:
+      summary: Asignar rol a usuario
+      tags:
+        - Roles
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              user_id:
+                type: string
+              rol_id:
+                type: string
+      responses:
+        200:
+          description: Rol asignado
+  /roles:
+    get:
+      summary: Obtener roles existentes
+      tags:
+        - Roles
+      responses:
+        200:
+          description: Lista de roles
+  /eliminar_usuario_proyecto:
+    patch:
+      summary: Eliminar usuario de proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              proyecto_id:
+                type: string
+              usuario_id:
+                type: string
+      responses:
+        200:
+          description: Usuario eliminado
+  /asignar_regla_distribucion:
+    post:
+      summary: Asignar regla de distribucion
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Regla asignada
+  /crear_solicitud_regla_fija:
+    post:
+      summary: Crear solicitud de regla fija
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Solicitud creada
+  /eliminar_solicitud_regla_fija/{id}:
+    post:
+      summary: Eliminar solicitud regla fija
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Solicitud eliminada
+  /completar_solicitud_regla_fija/{id}:
+    post:
+      summary: Completar solicitud regla fija
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Solicitud completada
+  /asignar_balance:
+    patch:
+      summary: Asignar balance al proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Balance asignado
+  /mostrar_usuarios:
+    get:
+      summary: Mostrar usuarios
+      tags:
+        - Usuarios
+      responses:
+        200:
+          description: Lista de usuarios
+  /mostrar_proyectos:
+    get:
+      summary: Mostrar proyectos
+      tags:
+        - Proyectos
+      responses:
+        200:
+          description: Lista de proyectos
+  /proyecto/{proyecto_id}/objetivos:
+    get:
+      summary: Objetivos de proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: proyecto_id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Objetivos obtenidos
+  /proyecto/{id}/acciones:
+    get:
+      summary: Acciones del proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Acciones obtenidas
+  /proyecto/{id}:
+    get:
+      summary: Obtener proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Proyecto obtenido
+  /proyecto/{id}/documentos:
+    get:
+      summary: Documentos del proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Documentos obtenidos
+  /documento_crear:
+    post:
+      summary: Crear documento
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Documento creado
+  /documento_cerrar:
+    post:
+      summary: Cerrar documento
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Documento cerrado
+  /documento_eliminar:
+    post:
+      summary: Eliminar documento
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Documento eliminado
+  /eliminar_proyecto:
+    post:
+      summary: Eliminar proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Proyecto eliminado
+  /finalizar_proyecto:
+    post:
+      summary: Finalizar proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Proyecto finalizado
+  /proyecto/{id}/logs:
+    get:
+      summary: Logs del proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Logs obtenidos
+  /mostrar_solicitudes:
+    get:
+      summary: Mostrar solicitudes de reglas fijas
+      tags:
+        - Proyectos
+      responses:
+        200:
+          description: Solicitudes obtenidas
+  /mostrar_reglas_fijas:
+    get:
+      summary: Mostrar reglas fijas
+      tags:
+        - Proyectos
+      responses:
+        200:
+          description: Reglas obtenidas
+  /proyecto/{id}/movimientos/descargar:
+    get:
+      summary: Descargar movimientos de proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Archivo descargado
+  /proyecto/{id}/fin:
+    get:
+      summary: Obtener informacion de fin de proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Informacion obtenida
+  /asignar_regla_fija/:
+    post:
+      summary: Asignar regla fija a proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+      responses:
+        200:
+          description: Regla fija asignada
+  /reporte/proyecto/{proyecto_id}:
+    get:
+      summary: Obtener reporte por proyecto
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: proyecto_id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Reporte obtenido
+  /proyecto/{id}/reporte:
+    get:
+      summary: Obtener reporte de distribuciones
+      tags:
+        - Proyectos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        200:
+          description: Reporte obtenido
+  /dashboard_global:
+    get:
+      summary: Obtener datos de dashboard global
+      tags:
+        - Proyectos
+      responses:
+        200:
+          description: Datos obtenidos
+  /:
+    get:
+      summary: Comprobar disponibilidad
+      tags:
+        - Utilidades
+      responses:
+        200:
+          description: Pong
