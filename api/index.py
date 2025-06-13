@@ -6,6 +6,7 @@ from datetime import datetime
 from bson import ObjectId, json_util
 from util.backblaze import upload_file
 from collections import defaultdict
+from dateutil.relativedelta import relativedelta
 
 from util.decorators import validar_datos, allow_cors, token_required
 from util.generar_acta_finalizacion import generar_acta_finalizacion_pdf
@@ -1080,6 +1081,7 @@ def asignar_balance(user):
     data_acciones["type"] = "Fondeo"
     data_acciones["amount"] = data_balance
     data_acciones["total_amount"] = balance
+    data_acciones["created_at"] = datetime.utcnow()
     db_acciones.insert_one(data_acciones)
     message_log = f'{user["nombre"]} agrego balance al proyecto por un monto de: ${int_to_string(data_balance)}'
     agregar_log(proyecto_id, message_log)
@@ -1646,6 +1648,7 @@ def crear_presupuesto(user):
         "status": "new",
         "objetivo_especifico": objetivo_especifico,
         "archivos": [],
+        "created_at": datetime.utcnow(),
     }
 
     # Get uploaded files from request
@@ -1792,6 +1795,7 @@ def cerrar_presupuesto(user):
     data_acciones["monto_transferencia"] = monto_transferencia
     data_acciones["banco"] = banco
     data_acciones["cuenta_contable"] = cuenta_contable
+    data_acciones["created_at"] = datetime.utcnow()
     db_acciones.insert_one(data_acciones)
 
     # Cierras el presupuesto
@@ -2439,6 +2443,7 @@ def asignar_regla_fija(user):
         data_acciones["type"] = x["nombre_regla"]
         data_acciones["amount"] = x["monto"] * -1
         data_acciones["total_amount"] = balance
+        data_acciones["created_at"] = datetime.utcnow()
         db_acciones.insert_one(data_acciones)
 
         message_log = f'{user["nombre"]} asigno la regla: {regla["nombre"]} con el item {x["nombre_regla"]} con un monto de ${int_to_string(x["monto"])}'
@@ -2661,6 +2666,172 @@ def obtener_reporte_proyecto(id):
         "egresosPorTipo": egresos_tipo,
         "resumen": resumen
     })
+
+@app.route('/dashboard_global', methods=['GET'])
+@allow_cors
+def resumen_general():
+    """
+    Endpoint para obtener un resumen general del sistema.
+    ---
+    tags:
+      - Dashboard
+    parameters:
+      - name: range
+        in: query
+        type: string
+        enum: [1m, 6m, 1y, all]
+        default: 6m
+        description: Rango de tiempo a mostrar.
+    responses:
+      200:
+        description: Resumen general del sistema
+        schema:
+          type: object
+          properties:
+            balanceHistory:
+              type: array
+              items:
+                type: object
+                properties:
+                  fecha:
+                    type: string
+                    example: "2025-06"
+                  saldo:
+                    type: number
+                    example: 12345
+            categorias:
+              type: array
+              items:
+                type: object
+                properties:
+                  categoria:
+                    type: string
+                    example: "donacion"
+                  count:
+                    type: integer
+                    example: 2
+            totales:
+              type: object
+              properties:
+                ingresos:
+                  type: number
+                  example: 12000
+                egresos:
+                  type: number
+                  example: 5000
+            resumen:
+              type: object
+              properties:
+                proyectos:
+                  type: integer
+                  example: 8
+                miembros:
+                  type: integer
+                  example: 25
+                presupuestos:
+                  type: integer
+                  example: 10
+                presupuestos_finalizados:
+                  type: integer
+                  example: 4
+                balance_total:
+                  type: number
+                  example: 40000
+    """
+    range_str = request.args.get("range", "6m")
+    now = datetime.utcnow()
+
+    if range_str == "1m":
+      date_limit = now - relativedelta(months=1)
+    elif range_str == "6m":
+      date_limit = now - relativedelta(months=6)
+    elif range_str == "1y":
+      date_limit = now - relativedelta(years=1)
+    else:
+      date_limit = None  # mostrar todo
+
+    # Totales de ingresos y egresos
+    filtro_fecha = {}
+    if date_limit:
+        filtro_fecha = { "created_at": { "$gte": date_limit } }
+    ingresos = 0
+    egresos = 0
+    for a in db_acciones.find(filtro_fecha):
+        monto = a.get("amount", 0)
+        if monto >= 0:
+            ingresos += monto
+        else:
+            egresos += abs(monto)
+
+    # Categorías de proyectos
+    categorias = list(db_proyectos.aggregate([
+        {"$group": {"_id": "$categoria", "count": {"$sum": 1}}},
+        {"$project": {"categoria": "$_id", "count": 1, "_id": 0}}
+    ]))
+    # Encontrar ocurrencias de usuarios en proyectos
+    conteo_usuarios = defaultdict(lambda: {"name": "", "projects": 0})
+
+    # Consulta todos los proyectos
+    proyectos = list(db_proyectos.find())
+
+    for proyecto in proyectos:
+        miembros = proyecto.get("miembros", [])
+        for miembro in miembros:
+            user_info = miembro.get("usuario", {})
+            user_id = str(user_info.get("_id", {}).get("$oid")) if isinstance(user_info.get("_id"), dict) else str(user_info.get("_id"))
+            nombre = user_info.get("nombre", "Desconocido")
+
+            if user_id:
+                conteo_usuarios[user_id]["name"] = nombre
+                conteo_usuarios[user_id]["projects"] += 1
+
+    # Transformar a arreglo final
+    ocurrencias = [{"id": user_id, "name": info["name"], "projects": info["projects"]}
+                  for user_id, info in conteo_usuarios.items()]
+    # Resumen global
+    resumen = {
+        "proyectos": db_proyectos.count_documents({}),
+        "miembros": db_usuarios.count_documents({}),
+        "presupuestos": db_documentos.count_documents({**filtro_fecha}),
+        "presupuestos_finalizados": db_documentos.count_documents({"status": "finished", **filtro_fecha}),
+        "ocurrencias": ocurrencias,
+        "balance_total": sum(p.get("balance", 0) for p in db_proyectos.find(filtro_fecha))
+    }
+
+    # Historial de saldo mensual
+    balance_acumulado = 0
+    balanceHistory = []
+
+    # Últimos 6 meses
+    hoy = datetime.today().replace(day=1)
+    meses = [(hoy - relativedelta(months=i)).strftime("%Y-%m") for i in reversed(range(6))]
+
+    for mes in meses:
+        inicio_mes = datetime.strptime(mes, "%Y-%m")
+        fin_mes = (inicio_mes + relativedelta(months=1))
+
+        movimientos = db_acciones.find({
+            "created_at": {"$gte": inicio_mes, "$lt": fin_mes}
+        })
+
+        for m in movimientos:
+            balance_acumulado += m.get("amount", 0)
+
+        balanceHistory.append({
+            "fecha": mes,
+            "saldo": round(balance_acumulado / 100, 2)
+        })
+
+    return jsonify({
+        "balanceHistory": balanceHistory,
+        "categorias": categorias,
+        "totales": {
+            "ingresos": round(ingresos / 100, 2),
+            "egresos": round(egresos / 100, 2)
+        },
+        "resumen": resumen
+    })
+
 @app.route("/", methods=["GET"])
 @allow_cors
 def index():
