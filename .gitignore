@@ -4,3 +4,4 @@
 /enii-core
 /api/__pycache__
 /api/util/__pycache__
+.env
