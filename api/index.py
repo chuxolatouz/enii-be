@@ -466,8 +466,9 @@ def crear_categorias():
     color = "".join(random.choices(string.hexdigits[:-6], k=6))
     categoria = {"nombre": nombre, "color": color}
     categoria_insertada = db_categorias.insert_one(categoria)
-    categoria["id"] = str(categoria_insertada.inserted_id)
-    return jsonify(categoria), 201
+    print("Categoría insertada:", categoria_insertada.inserted_id)
+    
+    return jsonify({"message": "Categoría creada con éxito", "_id": str(categoria_insertada.inserted_id)}), 201
 
 @app.route("/cambiar_rol_usuario", methods=["POST"])
 @allow_cors
@@ -603,7 +604,11 @@ def crear_proyecto(user):
     data["miembros"] = []
     data["balance"] = 000
     data["balance_inicial"] = 000
-    data["status"] = {"actual": 1, "completado": []}
+    if "status" not in data or not isinstance(data["status"], dict):
+      data["status"] = {
+          "actual": 1,
+          "completado": []
+      }
     data["show"] = {"status": False}
     data["owner"] = ObjectId(current_user)
     data["user"] = user
@@ -756,10 +761,10 @@ def asignar_usuario_proyecto(user):
     query = {"$push": {"miembros": data}}
     # Agregar el usuario a la lista de miembros
     if 2 not in proyecto["status"]["completado"]:
-        new_status = actualizar_pasos(proyecto["status"], 2)
+        new_status, _ = actualizar_pasos(proyecto["status"], 2)
 
     if data["role"]["value"] == "lider":
-        new_status = actualizar_pasos(proyecto["status"], 3)
+        new_status, _ = actualizar_pasos(proyecto["status"], 3)
 
     if bool(new_status):
         query["$set"] = {"status": new_status}
@@ -875,7 +880,7 @@ def asignar_regla_distribucion(user):
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
 
     if 4 not in proyecto["status"]["completado"]:
-        new_status = actualizar_pasos(proyecto["status"], 4)
+        new_status, _ = actualizar_pasos(proyecto["status"], 4)
         db_proyectos.update_one(
             {"_id": ObjectId(proyecto_id)},
             {"$set": {"status": new_status, "reglas": regla_distribucion}},
@@ -1072,7 +1077,8 @@ def asignar_balance(user):
     new_changes = {"balance": balance}
 
     if 1 not in proyecto["status"]["completado"]:
-        new_status = actualizar_pasos(proyecto["status"], 1)
+        new_status, _ = actualizar_pasos(proyecto["status"], 1)
+        print(new_status)
         new_changes["status"] = new_status
         new_changes["balance_inicial"] = balance
 
@@ -2452,7 +2458,7 @@ def asignar_regla_fija(user):
         agregar_log(proyecto_id, message_log)
 
     # Asignar la regla
-    new_status = actualizar_pasos(proyecto["status"], 5)
+    new_status, _ = actualizar_pasos(proyecto["status"], 5)
 
     db_proyectos.update_one(
         {"_id": ObjectId(proyecto_id)},

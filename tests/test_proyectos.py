@@ -1,6 +1,7 @@
 # tests/test_projects.py
 import unittest
 from datetime import datetime, timezone
+from pymongo import MongoClient
 from api.index import app
 
 class ProjectTestCase(unittest.TestCase):
