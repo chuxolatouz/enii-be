@@ -35,7 +35,8 @@ jsonschema==4.17.3
 referencing==0.28.0
 flasgger==0.9.7b2
 python-dateutil>=2.8.0
-pdfkit>=1.0.0pytest==8.4.1
+pdfkit>=1.0.0
+pytest==8.4.1
 pytest==8.4.1
 dotenv==0.9.9
 python-dotenv==1.1.1
