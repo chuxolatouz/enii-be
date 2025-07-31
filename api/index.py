@@ -1629,6 +1629,7 @@ def crear_presupuesto(user):
     objetivo_especifico = request.form.get("objetivo_especifico")
 
     # Validate required fields
+    print(project_id, descripcion, monto)
     if not project_id or not descripcion or not monto:
         return jsonify({"error": "Missing required fields"}), 400
         
@@ -1706,7 +1707,7 @@ def crear_presupuesto(user):
     agregar_log(project_id, message_log)
 
     # Return success response
-    return jsonify({"mensaje": "Archivos subidos exitosamente"}), 201
+    return jsonify({"mensaje": "Archivos subidos exitosamente", "_id": str(result.inserted_id)}), 201
 
 
 @app.route("/documento_cerrar", methods=["POST"])
@@ -1786,7 +1787,7 @@ def cerrar_presupuesto(user):
     data_balance = string_to_int(data_balance)
     proyecto_balance = int(proyecto["balance"])
     balance = proyecto_balance - data_balance
-
+    print(f"Balance: {balance}, Proyecto Balance: {proyecto_balance}, Data Balance: {data_balance}")
     if data_balance > proyecto_balance:
       return jsonify({"error": "El monto aprobado excede el saldo disponible del proyecto."}), 400
     
