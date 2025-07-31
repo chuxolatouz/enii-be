@@ -26,7 +26,6 @@ import json
 import random
 import math
 import string
-import os
 from io import BytesIO
 
 ### Swagger UI configuration ###f
@@ -193,7 +192,6 @@ def login():
     """
     data = request.get_json()
     usuario = db_usuarios.find_one({"email": data["email"]})
-    print(data)
     if usuario and bcrypt.check_password_hash(usuario["password"], data["password"]):
         token = generar_token(usuario, app.config["SECRET_KEY"])
 
@@ -612,13 +610,13 @@ def crear_proyecto(user):
     project = db_proyectos.insert_one(data)
     message_log = "Usuario %s ha creado el proyecto" % user["nombre"]
     agregar_log(project.inserted_id, message_log)
-    return jsonify({"message": "Proyecto creado con éxito"}), 201
+    return jsonify({"message": "Proyecto creado con éxito", "_id": str(project.inserted_id)}), 201
 
 
 @app.route("/actualizar_proyecto/<project_id>", methods=["PUT"])
 @token_required
 @validar_datos(
-    {"nombre": str, "descripcion": str, "fecha_inicio": str, "fecha_fin": str}
+    {"nombre": str, "descripcion": str}
 )
 def actualizar_proyecto(user, project_id):
     """
