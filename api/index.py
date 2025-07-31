@@ -1,16 +1,18 @@
-from flask import Flask, request, jsonify, send_file
+import os
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
 from flask_pymongo import PyMongo
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId, json_util
-from util.backblaze import upload_file
+from api.util.backblaze import upload_file
 from collections import defaultdict
 from dateutil.relativedelta import relativedelta
 
-from util.decorators import validar_datos, allow_cors, token_required
-from util.generar_acta_finalizacion import generar_acta_finalizacion_pdf
-from util.utils import (
+from api.util.decorators import validar_datos, allow_cors, token_required
+from api.util.generar_acta_finalizacion import generar_acta_finalizacion_pdf
+from api.util.utils import (
     string_to_int,
     int_to_string,
     generar_token,
@@ -30,14 +32,16 @@ from io import BytesIO
 ### Swagger UI configuration ###f
 SWAGGER_URL = '/swagger'   # URL for exposing Swagger UI (without trailing slash)
 API_URL = '/swagger.json'  # Our API url route
+print(os.getenv("FLASK_ENV"))
+env_file = ".env.test" if os.getenv("FLASK_ENV") == "testing" else ".env"
+load_dotenv(env_file)
 
 app = Flask(__name__)
 Swagger(app)
 
-app.config["MONGO_URI"] = (
-    "mongodb+srv://enii:e5YztEJeaJ9Z@cluster0.cnakns0.mongodb.net/enii"
-)
+app.config["MONGO_URI"] = os.getenv("MONGODB_URI", "mongodb://localhost:27017/enii")
 # app.config["MONGO_URI"] = "mongodb://localhost:27017/mi_db"
+app.config["TESTING"] = os.getenv("FLASK_ENV") == "testing"
 app.config["SECRET_KEY"] = "tu_clave_secreta"
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
@@ -66,7 +70,7 @@ db_logs = mongo.db.logs
 def agregar_log(id_proyecto, mensaje):
     data = {}
     data["id_proyecto"] = ObjectId(id_proyecto)
-    data["fecha_creacion"] = datetime.utcnow()
+    data["fecha_creacion"] = datetime.now(timezone.utc)
     # data["usuario"] = user
     data["mensaje"] = mensaje
 
@@ -189,7 +193,7 @@ def login():
     """
     data = request.get_json()
     usuario = db_usuarios.find_one({"email": data["email"]})
-
+    print(data)
     if usuario and bcrypt.check_password_hash(usuario["password"], data["password"]):
         token = generar_token(usuario, app.config["SECRET_KEY"])
 
@@ -738,7 +742,7 @@ def asignar_usuario_proyecto(user):
     data = request.get_json()
     proyecto_id = data["proyecto_id"]
     usuario = data["usuario"]
-    fecha_hora_actual = datetime.utcnow()
+    fecha_hora_actual = datetime.now(timezone.utc)
     data["fecha_ingreso"] = fecha_hora_actual.strftime("%d/%m/%Y %H:%M")
     # Verificar si el usuario ya está en la lista de miembros
     proyecto = db_proyectos.find_one({"_id": ObjectId(proyecto_id)})
@@ -1461,7 +1465,7 @@ def proyecto(id):
     # Convertir el ID a ObjectId
     try:
         id = ObjectId(id.strip())  # <-- limpiamos espacios invisibles
-    except Exception as e:
+    except Exception:
         return {"message": "ID de proyecto inválido"}, 400
 
     # Buscar el producto por ID en la base de datos
@@ -2011,8 +2015,8 @@ def finalizar_proyecto(user):
     # 2. Obtener logs del sistema
     logs = list(db_logs.find({"proyecto_id": ObjectId(proyecto_id)}))
     logs_simple = [
-        {"fecha": str(l.get("fecha_creacion")), "mensaje": l.get("mensaje")}
-        for l in logs
+        {"fecha": str(ls.get("fecha_creacion")), "mensaje": ls.get("mensaje")}
+        for ls in logs
     ]
 
     # 3. Obtener presupuestos relacionados

@@ -3,8 +3,8 @@ from jose import jwt
 from bson import ObjectId, json_util
 from io import StringIO, BytesIO
 from flask import send_file
-from util.generar_acta_inicio import generar_acta_inicio_pdf
-from util.backblaze import upload_file
+from api.util.generar_acta_inicio import generar_acta_inicio_pdf
+from api.util.backblaze import upload_file
 import csv  # Para CSV
 import json
 
