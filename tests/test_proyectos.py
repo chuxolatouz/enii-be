@@ -103,6 +103,9 @@ class ProjectTestCase(unittest.TestCase):
         
         self.assertIn("message", data)
         self.assertEqual(data["message"], "Balance asignado con éxito")
+    def tearDown(self):
+        
+        return super().tearDown()
 
 if __name__ == '__main__':
     unittest.main()

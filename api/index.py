@@ -2436,23 +2436,23 @@ def asignar_regla_fija(user):
             {"message": "Antes de asignar regla tienes que asignar balance"}
         ), 400
 
-    # Descontar proyecto
+    balance = int(proyecto["balance"])  # comienza con el balance inicial del proyecto
+
     for x in regla["reglas"]:
-        proyecto_balance = int(proyecto["balance"])
-        balance = proyecto_balance - x["monto"]
+        balance -= x["monto"]  # actualizar balance acumulativo
+
         db_proyectos.update_one(
             {"_id": ObjectId(proyecto_id)}, {"$set": {"balance": balance}}
         )
 
-        # Agregas la accion a las actividades
-
-        data_acciones = {}
-        data_acciones["project_id"] = ObjectId(proyecto_id)
-        data_acciones["user"] = user["nombre"]
-        data_acciones["type"] = x["nombre_regla"]
-        data_acciones["amount"] = x["monto"] * -1
-        data_acciones["total_amount"] = balance
-        data_acciones["created_at"] = datetime.utcnow()
+        data_acciones = {
+            "project_id": ObjectId(proyecto_id),
+            "user": user["nombre"],
+            "type": x["nombre_regla"],
+            "amount": x["monto"] * -1,
+            "total_amount": balance,
+            "created_at": datetime.utcnow()
+        }
         db_acciones.insert_one(data_acciones)
 
         message_log = f'{user["nombre"]} asigno la regla: {regla["nombre"]} con el item {x["nombre_regla"]} con un monto de ${int_to_string(x["monto"])}'
